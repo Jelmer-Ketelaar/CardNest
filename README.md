@@ -49,14 +49,25 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Every catalog card keeps a record of the external source(s) it was imported from (source name, external id, raw
   payload, last sync date), so a future import adapter can refresh data without silently overwriting manual
   corrections
-- Catalog data is intentionally public and read-only for now. There is no "I own this card" concept yet — that is
-  the Collection module, described below
+- Catalog data is intentionally public and read-only. User ownership is modeled separately by the Collection module
 - Seed data ships two real-shaped sets and twenty cards for local exploration, including the "Mudkip 19/25" example
   used throughout the product specification
 
+### Physical collection (Collection module)
+
+- Register one or up to one hundred copies of a catalog card in one action; each physical copy receives its own UUID
+- Record language, controlled card variant, condition, purchase price in integer euro cents, purchase date, seller,
+  and notes
+- Browse and filter only your own collection by card, set, name, number, language, variant, condition, and status
+- Detect duplicates by catalog card + language + variant while excluding archived cards from the owned count
+- Update or archive an owned item; archived items remain queryable for history but become immutable
+- Object-level authorization deliberately returns the same `404` for unknown and other users' private items
+
 ### Frontend shell
 
-- Vue 3 + TypeScript single-page app with registration, login, and a dashboard page behind a route guard
+- Vue 3 + TypeScript single-page app with registration, login, dashboard, and an authenticated collection workspace
+- Search the catalog, add one or more physical cards, switch between grid/list views, filter, edit, see duplicate
+  counts, and archive an item from the collection workspace
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
 - A typed API client and a Pinia store for authentication state
 
@@ -74,8 +85,6 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Collection** — registering the physical cards a user actually owns: condition, purchase price, photos, notes,
-  and duplicate detection
 - **Storage & Binder** — hierarchical storage locations, visual binder pages/slots, drag-and-drop placement, and
   placeholders for missing cards in an incomplete set
 - **Wishlist** — tracking wanted cards per set/variant/condition/price and auto-matching them against purchases
@@ -117,8 +126,8 @@ Doctrine entities never cross the API boundary: controllers only ever return exp
 interfaces live in `Domain`; their Doctrine-backed implementations live in `Infrastructure` and are wired together
 in `config/services.yaml`, so persistence details can change without touching business logic.
 
-Implemented modules today: `Identity`, `Catalog`, `Shared`. Planned modules follow the same shape (see "What's not
-built yet" above).
+Implemented modules today: `Identity`, `Catalog`, `Collection`, and `Shared`. Planned modules follow the same shape
+(see "What's not built yet" above).
 
 ## Tech stack
 
@@ -141,3 +150,39 @@ cardnest/
   docs/        API contract and other reference documentation
   compose.yaml Local multi-service Docker Compose stack
 ```
+
+## Run locally
+
+Requirements: Docker with Docker Compose and Git.
+
+```bash
+cp .env.example .env
+cp backend/.env.example backend/.env.local
+cp frontend/.env.example frontend/.env.local
+docker compose run --rm backend composer install
+docker compose run --rm --no-deps frontend npm install
+docker compose up -d postgres redis
+docker compose run --rm backend php bin/console doctrine:database:create --if-not-exists
+docker compose run --rm backend php bin/console doctrine:migrations:migrate --no-interaction
+docker compose run --rm backend php bin/console doctrine:fixtures:load --append
+docker compose up backend frontend
+```
+
+Open the frontend at <http://localhost:5174>. The API is available at <http://localhost:8080/api/v1>; its health
+endpoint is `/api/v1/health`.
+
+## Quality checks
+
+```bash
+docker compose run --rm -e APP_ENV=test backend php bin/console doctrine:database:create --if-not-exists
+docker compose run --rm -e APP_ENV=test backend php bin/console doctrine:migrations:migrate --no-interaction
+docker compose run --rm -e APP_ENV=test backend php bin/phpunit
+docker compose run --rm backend vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+docker compose run --rm backend vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes
+docker compose run --rm --no-deps frontend npm test
+docker compose run --rm --no-deps frontend npm run build
+docker compose run --rm --no-deps frontend npm run test:e2e
+```
+
+The frontend image includes Chromium and its operating-system dependencies for Playwright. Rebuild it after changing
+the Playwright version in `frontend/package.json`.

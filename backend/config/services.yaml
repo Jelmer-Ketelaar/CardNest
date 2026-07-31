@@ -38,5 +38,8 @@ services:
     App\Catalog\Domain\Repository\CatalogCardRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCatalogCardRepository
 
+    App\Collection\Domain\Repository\CollectionItemRepository:
+        alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionItemRepository
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

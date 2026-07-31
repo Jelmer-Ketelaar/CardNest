@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace App\Shared\Infrastructure\Http;
 
+use App\Collection\Application\Exception\CardVariantUnavailable;
+use App\Collection\Application\Exception\CatalogCardUnavailable;
+use App\Collection\Application\Exception\CollectionItemNotFound;
+use App\Collection\Domain\Exception\ArchivedCollectionItemCannotBeChanged;
+use App\Collection\Domain\Exception\CardVariantDoesNotBelongToCard;
 use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\InvalidCredentials;
 use Psr\Log\LoggerInterface;
@@ -32,6 +37,11 @@ final readonly class JsonExceptionSubscriber
         [$status, $code, $message] = match (true) {
             $exception instanceof EmailAlreadyRegistered => [409, 'email_already_registered', $exception->getMessage()],
             $exception instanceof InvalidCredentials => [401, 'invalid_credentials', $exception->getMessage()],
+            $exception instanceof CollectionItemNotFound => [404, 'collection_item_not_found', $exception->getMessage()],
+            $exception instanceof CatalogCardUnavailable => [422, 'catalog_card_unavailable', $exception->getMessage()],
+            $exception instanceof CardVariantUnavailable,
+            $exception instanceof CardVariantDoesNotBelongToCard => [422, 'card_variant_unavailable', $exception->getMessage()],
+            $exception instanceof ArchivedCollectionItemCannotBeChanged => [409, 'collection_item_archived', $exception->getMessage()],
             $exception instanceof HttpExceptionInterface => [$exception->getStatusCode(), 'request_failed', $exception->getMessage()],
             default => [500, 'internal_error', 'Er is een onverwachte fout opgetreden.'],
         };

@@ -3,9 +3,12 @@ defineProps<{
   id: string
   label: string
   modelValue: string
-  type?: 'text' | 'email' | 'password'
+  type?: 'text' | 'email' | 'password' | 'search' | 'number' | 'date'
   autocomplete?: string
   error?: string
+  min?: string | number
+  max?: string | number
+  required?: boolean
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -19,6 +22,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
       :value="modelValue"
       :type="type ?? 'text'"
       :autocomplete="autocomplete"
+      :min="min"
+      :max="max"
+      :required="required"
       :aria-invalid="Boolean(error)"
       :aria-describedby="error ? `${id}-error` : undefined"
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
