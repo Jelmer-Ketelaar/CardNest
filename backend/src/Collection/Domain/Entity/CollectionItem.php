@@ -229,6 +229,16 @@ final class CollectionItem
         $this->touch();
     }
 
+    public function completeSale(): void
+    {
+        if ($this->status !== CollectionItemStatus::ForSale) {
+            throw new ListedCollectionItemCannotBeChanged('Alleen een verkochte kaart kan na ontvangst worden gearchiveerd.');
+        }
+
+        $this->status = CollectionItemStatus::Archived;
+        $this->touch();
+    }
+
     public function duplicateKey(): string
     {
         return self::buildDuplicateKey(

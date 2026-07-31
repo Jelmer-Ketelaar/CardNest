@@ -73,6 +73,7 @@ flowchart TD
     Marketplace[Marketplace: fixed-price listings]
     Order[Order: cart and seller orders]
     Payment[Payment: provider-neutral charges]
+    Shipping[Shipping: dispatch and receipt confirmation]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -93,6 +94,11 @@ flowchart TD
     Order --> Identity
     Order --> Payment
     Order --> Shared
+    Shipping --> Order
+    Shipping --> Collection
+    Shipping --> Storage
+    Shipping --> Identity
+    Shipping --> Shared
     Payment --> Identity
     Payment --> Shared
     Catalog --> Shared
@@ -109,11 +115,12 @@ flowchart TD
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
 | `Wishlist` | `wishlists`, `wishlist_items` | `Catalog` (wanted card/variant), `Collection` (matching physical items), `Identity` (owner), `Shared` (`Money`) |
 | `Marketplace` | `listings`, `listing_images`, `listing_shipping_methods`, `listing_price_history`, `listing_reservations` | `Collection` (physical item), `Identity` (seller/buyer), `Shared` (`Money`) |
-| `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses` | `Marketplace` (listing/reservation), `Payment`, `Identity`, `Shared` |
+| `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses`, `order_status_history` | `Marketplace` (listing/reservation), `Payment`, `Identity`, `Shared` |
 | `Payment` | `payments`, `payment_transactions`; the `PaymentProvider` port and fake adapter | `Identity` (buyer), `Shared` (`Money`) |
+| `Shipping` | `shipments`; seller dispatch, buyer receipt confirmation, and sold-item archival | `Order`, `Collection`, `Storage`, `Identity`, `Shared` |
 | `Shared` | cross-cutting value objects, transaction port, and the API exception handler | — |
 
-Planned modules (`Shipping`, `Review`, `Notification`, `Pricing`, `Moderation`, `Reporting`)
+Planned modules (`Review`, `Notification`, `Pricing`, `Moderation`, `Reporting`)
 will slot in the same way, each adding one more layer of dependency on
 `Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
 
@@ -215,6 +222,38 @@ idempotent callback/outbox increment rather than holding a database transaction 
 Cart delivery quotes are server-owned. For one seller, only methods supported by every listing are returned, and
 the group price is the maximum configured per-listing amount for that method. The browser submits seller UUID →
 method mappings, but checkout recalculates them and rejects missing, extra, or stale choices.
+
+## Example flow: shipping and completing an order
+
+```mermaid
+sequenceDiagram
+    participant Seller
+    participant Buyer
+    participant Shipping as Shipping application service
+    participant Workflow as Order workflow
+    participant DB as PostgreSQL
+
+    Seller->>Shipping: POST /me/orders/{id}/mark-shipped
+    Shipping->>DB: BEGIN; lock seller order
+    Shipping->>Workflow: paid → shipped
+    Shipping->>DB: append status history + create shipment
+    Shipping->>DB: COMMIT
+    Shipping-->>Seller: shipped order DTO
+    Buyer->>Shipping: POST /me/orders/{id}/confirm-received
+    Shipping->>DB: BEGIN; lock buyer order
+    Shipping->>Workflow: shipped → completed
+    Shipping->>DB: mark shipment delivered
+    Shipping->>DB: archive sold items + close current placements
+    Shipping->>DB: COMMIT
+    Shipping-->>Buyer: completed order DTO
+```
+
+The role-specific repository methods deliberately return not found for the wrong participant, preventing order-id
+probing. Both commands validate their workflow transition after acquiring a pessimistic order lock. Completion
+then locks sold physical items in deterministic UUID order; the order, shipment, immutable status history, item
+archival, and location-history closure therefore either all commit or all roll back. Creating the buyer's new
+physical collection item is kept out of this transaction because the buyer must first confirm condition and choose
+its destination.
 
 ## Data conventions that hold across every module
 

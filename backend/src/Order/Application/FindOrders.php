@@ -19,7 +19,7 @@ final readonly class FindOrders
 
     public function list(User $participant): OrderCollectionResponse
     {
-        return new OrderCollectionResponse($this->orders->findForParticipant($participant));
+        return new OrderCollectionResponse($this->orders->findForParticipant($participant), $participant);
     }
 
     public function get(User $participant, string $id): OrderResponse
@@ -29,6 +29,6 @@ final readonly class FindOrders
             throw new OrderNotFound('Order niet gevonden.');
         }
 
-        return new OrderResponse($order);
+        return new OrderResponse($order, $participant);
     }
 }

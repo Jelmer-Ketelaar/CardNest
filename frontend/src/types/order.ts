@@ -74,7 +74,19 @@ export interface Order {
     provider: string
     providerReference: string | null
   }
+  statusHistory: Array<{
+    id: string
+    from: Order['status'] | null
+    to: Order['status']
+    actor: { id: string }
+    occurredAt: string
+  }>
+  availableActions: {
+    markShipped: boolean
+    confirmReceived: boolean
+  }
   paidAt: string | null
+  completedAt: string | null
   createdAt: string
   updatedAt: string
 }

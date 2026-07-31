@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace App\Order\Application\Dto;
 
+use App\Identity\Domain\Entity\User;
 use App\Order\Domain\Entity\Order;
 use App\Order\Domain\Entity\OrderItem;
+use App\Order\Domain\Entity\OrderStatus;
+use App\Order\Domain\Entity\OrderStatusHistory;
 
 final readonly class OrderResponse
 {
-    public function __construct(private Order $order)
-    {
+    public function __construct(
+        private Order $order,
+        private ?User $participant = null,
+    ) {
     }
 
     /** @return array<string, mixed> */
@@ -49,7 +54,22 @@ final readonly class OrderResponse
                 'provider' => $payment->getProviderName(),
                 'providerReference' => $payment->getProviderReference(),
             ],
+            'statusHistory' => array_map(
+                static fn (OrderStatusHistory $history): array => [
+                    'id' => $history->getId()->toRfc4122(),
+                    'from' => $history->getFromStatus()?->value,
+                    'to' => $history->getToStatus()->value,
+                    'actor' => ['id' => $history->getActor()->getId()->toRfc4122()],
+                    'occurredAt' => $history->getOccurredAt()->format(DATE_ATOM),
+                ],
+                $this->order->getStatusHistory()->toArray(),
+            ),
+            'availableActions' => [
+                'markShipped' => $this->canSeller(OrderStatus::Paid),
+                'confirmReceived' => $this->canBuyer(OrderStatus::Shipped),
+            ],
             'paidAt' => $this->order->getPaidAt()?->format(DATE_ATOM),
+            'completedAt' => $this->order->getCompletedAt()?->format(DATE_ATOM),
             'createdAt' => $this->order->getCreatedAt()->format(DATE_ATOM),
             'updatedAt' => $this->order->getUpdatedAt()->format(DATE_ATOM),
         ];
@@ -79,5 +99,19 @@ final readonly class OrderResponse
             'condition' => $ownedItem->getCondition()->value,
             'price' => $item->getPrice()->toArray(),
         ];
+    }
+
+    private function canSeller(OrderStatus $status): bool
+    {
+        return $this->participant instanceof User
+            && $this->order->getStatus() === $status
+            && $this->participant->getId()->equals($this->order->getSeller()->getId());
+    }
+
+    private function canBuyer(OrderStatus $status): bool
+    {
+        return $this->participant instanceof User
+            && $this->order->getStatus() === $status
+            && $this->participant->getId()->equals($this->order->getBuyer()->getId());
     }
 }

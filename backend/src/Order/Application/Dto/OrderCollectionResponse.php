@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Order\Application\Dto;
 
+use App\Identity\Domain\Entity\User;
 use App\Order\Domain\Entity\Order;
 
 final readonly class OrderCollectionResponse
 {
     /** @param list<Order> $orders */
-    public function __construct(private array $orders)
-    {
+    public function __construct(
+        private array $orders,
+        private User $participant,
+    ) {
     }
 
     /** @return array{items: list<array<string, mixed>>, total: int} */
@@ -18,7 +21,7 @@ final readonly class OrderCollectionResponse
     {
         return [
             'items' => array_map(
-                static fn (Order $order): array => (new OrderResponse($order))->toArray(),
+                fn (Order $order): array => (new OrderResponse($order, $this->participant))->toArray(),
                 $this->orders,
             ),
             'total' => count($this->orders),

@@ -47,7 +47,7 @@ module directory as shown above. `backend/src/Shared` holds cross-cutting buildi
 exception handler) that any module may depend on, but that must never depend back on a specific module.
 
 Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Marketplace`,
-`Order`, `Payment`, `Shared`.
+`Order`, `Payment`, `Shipping`, `Shared`.
 
 ## Adding a new module or endpoint
 

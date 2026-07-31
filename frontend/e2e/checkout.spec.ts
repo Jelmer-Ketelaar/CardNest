@@ -1,5 +1,64 @@
 import { expect, test } from '@playwright/test'
 
+function actionableOrder(status: 'paid' | 'shipped') {
+  const now = new Date().toISOString()
+  const buyerId = crypto.randomUUID()
+  const sellerId = crypto.randomUUID()
+  const history = [
+    { id: crypto.randomUUID(), from: null, to: 'pending_payment', actor: { id: buyerId }, occurredAt: now },
+    { id: crypto.randomUUID(), from: 'pending_payment', to: 'paid', actor: { id: buyerId }, occurredAt: now },
+  ]
+  if (status === 'shipped') {
+    history.push({ id: crypto.randomUUID(), from: 'paid', to: 'shipped', actor: { id: sellerId }, occurredAt: now })
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    status,
+    buyer: { id: buyerId },
+    seller: { id: sellerId },
+    items: [{
+      id: crypto.randomUUID(),
+      listingId: crypto.randomUUID(),
+      card: {
+        id: crypto.randomUUID(),
+        name: 'Mudkip',
+        number: '19/25',
+        set: { id: crypto.randomUUID(), name: "McDonald's Collection 2021" },
+      },
+      language: 'en',
+      variant: 'holo',
+      condition: 'near_mint',
+      price: { amount: 750, currency: 'EUR' },
+    }],
+    shippingMethod: 'letter_mail',
+    costs: {
+      items: { amount: 750, currency: 'EUR' },
+      shipping: { amount: 150, currency: 'EUR' },
+      serviceFee: { amount: 0, currency: 'EUR' },
+      total: { amount: 900, currency: 'EUR' },
+    },
+    shippingAddress: {
+      fullName: 'Sam Collector',
+      addressLine1: 'Dorpsstraat 1',
+      addressLine2: null,
+      postalCode: '1234 AB',
+      city: 'Utrecht',
+      countryCode: 'NL',
+    },
+    payment: { id: crypto.randomUUID(), status: 'succeeded', provider: 'fake', providerReference: 'fake_test' },
+    statusHistory: history,
+    availableActions: {
+      markShipped: status === 'paid',
+      confirmReceived: status === 'shipped',
+    },
+    paidAt: now,
+    completedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
 test('a collector can add a listing and complete a split-ready test checkout', async ({ page }) => {
   const sellerId = crypto.randomUUID()
   const listingId = crypto.randomUUID()
@@ -92,7 +151,13 @@ test('a collector can add a listing and complete a split-ready test checkout', a
       countryCode: 'NL',
     },
     payment: { id: paymentId, status: 'succeeded', provider: 'fake', providerReference: 'fake_test' },
+    statusHistory: [
+      { id: crypto.randomUUID(), from: null, to: 'pending_payment', actor: { id: crypto.randomUUID() }, occurredAt: now },
+      { id: crypto.randomUUID(), from: 'pending_payment', to: 'paid', actor: { id: crypto.randomUUID() }, occurredAt: now },
+    ],
+    availableActions: { markShipped: false, confirmReceived: false },
     paidAt: now,
+    completedAt: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -159,4 +224,63 @@ test('a collector can add a listing and complete a split-ready test checkout', a
     postalCode: '1234 AB',
     countryCode: 'NL',
   })
+})
+
+test('a seller can mark a paid order as shipped', async ({ page }) => {
+  const order = actionableOrder('paid')
+  const shippedOrder = {
+    ...order,
+    status: 'shipped',
+    availableActions: { markShipped: false, confirmReceived: false },
+    statusHistory: [
+      ...order.statusHistory,
+      { id: crypto.randomUUID(), from: 'paid', to: 'shipped', actor: order.seller, occurredAt: new Date().toISOString() },
+    ],
+  }
+
+  await page.addInitScript(() => localStorage.setItem('cardnest.authToken', 'seller-token'))
+  await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
+  })
+  await page.route(new RegExp(`/api/v1/me/orders/${order.id}/mark-shipped$`), async (route) => {
+    expect(route.request().method()).toBe('POST')
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(shippedOrder) })
+  })
+
+  await page.goto('/orders')
+  await page.getByRole('button', { name: 'Markeer als verzonden' }).click()
+
+  await expect(page.getByText('De order is als verzonden gemarkeerd.')).toBeVisible()
+  await expect(page.getByText('Verzonden', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Markeer als verzonden' })).toHaveCount(0)
+})
+
+test('a buyer can confirm a shipped order as received', async ({ page }) => {
+  const order = actionableOrder('shipped')
+  const completedOrder = {
+    ...order,
+    status: 'completed',
+    completedAt: new Date().toISOString(),
+    availableActions: { markShipped: false, confirmReceived: false },
+    statusHistory: [
+      ...order.statusHistory,
+      { id: crypto.randomUUID(), from: 'shipped', to: 'completed', actor: order.buyer, occurredAt: new Date().toISOString() },
+    ],
+  }
+
+  await page.addInitScript(() => localStorage.setItem('cardnest.authToken', 'buyer-token'))
+  await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
+  })
+  await page.route(new RegExp(`/api/v1/me/orders/${order.id}/confirm-received$`), async (route) => {
+    expect(route.request().method()).toBe('POST')
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(completedOrder) })
+  })
+
+  await page.goto('/orders')
+  await page.getByRole('button', { name: 'Bevestig ontvangst' }).click()
+
+  await expect(page.getByText('Ontvangst bevestigd. De order is voltooid.')).toBeVisible()
+  await expect(page.getByText('Voltooid', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Bevestig ontvangst' })).toHaveCount(0)
 })

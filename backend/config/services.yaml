@@ -75,6 +75,9 @@ services:
     App\Payment\Domain\Provider\PaymentProvider:
         alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
 
+    App\Shipping\Domain\Repository\ShipmentRepository:
+        alias: App\Shipping\Infrastructure\Persistence\DoctrineShipmentRepository
+
     App\Shared\Domain\Transaction\TransactionManager:
         alias: App\Shared\Infrastructure\Persistence\DoctrineTransactionManager
 

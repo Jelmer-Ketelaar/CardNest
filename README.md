@@ -117,7 +117,7 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Schedule optional expiration through Redis-backed Symfony Messenger; an idempotent worker closes the listing and
   releases its physical card when the end time arrives
 
-### Cart, checkout and orders (Order + Payment modules)
+### Cart, checkout and delivery (Order + Payment + Shipping modules)
 
 - Add active listings from multiple sellers to one private cart; duplicate entries and buying your own listing are
   rejected by the backend
@@ -131,6 +131,12 @@ CardNest is implemented incrementally, one module at a time. This is the current
   asks for or stores card or bank details
 - Keep completed reservation and payment-transaction records for traceability, and expose only orders in which the
   caller is the buyer or seller
+- Let only the seller move a paid order to `shipped` and only the buyer confirm receipt; each command locks the
+  order and validates the Symfony Workflow transition inside one database transaction
+- Keep an immutable actor-stamped order-status history plus a one-per-order shipment record with shipped and
+  delivered timestamps
+- On confirmed receipt, archive the seller's sold physical collection items and close their current storage or
+  binder placements atomically while retaining the full location and sale history
 
 ### Frontend
 
@@ -154,8 +160,8 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Shipping & order completion** — preparing/shipped/received transitions, delivery tracking, collection transfer,
-  cancellations and refunds
+- **Buyer collection import, cancellations and refunds** — confirm the received card's condition and destination
+  before creating the buyer-owned physical object; add reversible post-payment failure paths separately
 - **Review, Notification, Pricing, Moderation, Reporting** — supporting modules around the marketplace
   (buyer/seller reviews, alerts, price history, fraud signals, financial reporting, ...)
 
@@ -203,6 +209,7 @@ flowchart TD
     Marketplace[Marketplace: fixed-price listings]
     Order[Order: cart, reservations, seller orders]
     Payment[Payment: provider-neutral payments]
+    Shipping[Shipping: dispatch and receipt confirmation]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -223,6 +230,11 @@ flowchart TD
     Order --> Identity
     Order --> Payment
     Order --> Shared
+    Shipping --> Order
+    Shipping --> Collection
+    Shipping --> Storage
+    Shipping --> Identity
+    Shipping --> Shared
     Payment --> Identity
     Payment --> Shared
     Catalog --> Shared
@@ -231,7 +243,8 @@ flowchart TD
 ```
 
 Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Marketplace`,
-`Order`, `Payment`, `Shared`. Planned modules follow the same shape (see "What's not built yet" above). For a deeper walkthrough — including a
+`Order`, `Payment`, `Shipping`, `Shared`. Planned modules follow the same shape (see "What's not built yet" above).
+For a deeper walkthrough — including a
 request-sequence diagram and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
 
 ## Tech stack

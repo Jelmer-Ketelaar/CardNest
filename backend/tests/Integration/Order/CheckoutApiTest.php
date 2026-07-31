@@ -21,6 +21,9 @@ use App\Marketplace\Domain\Entity\ShippingMethodCode;
 use App\Marketplace\Domain\ValueObject\ListingPhotoReference;
 use App\Marketplace\Domain\ValueObject\ShippingOption;
 use App\Shared\Domain\ValueObject\Money;
+use App\Storage\Domain\Entity\CollectionItemLocationHistory;
+use App\Storage\Domain\Entity\StorageLocation;
+use App\Storage\Domain\Entity\StorageLocationType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -240,6 +243,92 @@ final class CheckoutApiTest extends WebTestCase
         $this->authorizedRequest('GET', '/api/v1/me/orders', $this->buyerToken);
         self::assertResponseIsSuccessful();
         self::assertSame(0, $this->responseData()['total'] ?? null);
+    }
+
+    public function testSellerShipsAndBuyerCompletesOrderWithCollectionArchival(): void
+    {
+        // Arrange
+        $soldItem = $this->sellerAFirst->getCollectionItem();
+        $location = new StorageLocation($this->sellerA, 'Verkoopbox', StorageLocationType::Box);
+        $placement = CollectionItemLocationHistory::inStorage($soldItem, $location);
+        $this->entityManager->persist($location);
+        $this->entityManager->persist($placement);
+        $this->entityManager->flush();
+        $this->addToCart($this->buyerToken, $this->sellerAFirst);
+        $this->checkout($this->buyerToken, [
+            $this->sellerA->getId()->toRfc4122() => 'letter_mail',
+        ]);
+        self::assertResponseIsSuccessful();
+        $orderId = $this->responseData()['orders'][0]['id'] ?? null;
+        self::assertIsString($orderId);
+
+        // Act
+        $this->authorizedRequest('GET', '/api/v1/me/orders/'.$orderId, $this->sellerAToken);
+
+        // Assert
+        self::assertTrue($this->responseData()['availableActions']['markShipped'] ?? false);
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/me/orders/'.$orderId.'/mark-shipped', $this->buyerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('order_not_found', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/me/orders/'.$orderId.'/mark-shipped', $this->sellerAToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $shippedOrder = $this->responseData();
+        self::assertSame('shipped', $shippedOrder['status'] ?? null);
+        self::assertFalse($shippedOrder['availableActions']['markShipped'] ?? true);
+        self::assertSame(['pending_payment', 'paid', 'shipped'], array_column($shippedOrder['statusHistory'] ?? [], 'to'));
+        $connection = self::getContainer()->get(EntityManagerInterface::class)->getConnection();
+        self::assertSame(1, (int) $connection->fetchOne("SELECT COUNT(*) FROM shipments WHERE status = 'shipped'"));
+
+        // Act
+        $this->authorizedRequest('GET', '/api/v1/me/orders/'.$orderId, $this->buyerToken);
+
+        // Assert
+        self::assertTrue($this->responseData()['availableActions']['confirmReceived'] ?? false);
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/me/orders/'.$orderId.'/confirm-received', $this->sellerAToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('order_not_found', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/me/orders/'.$orderId.'/confirm-received', $this->buyerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $completedOrder = $this->responseData();
+        self::assertSame('completed', $completedOrder['status'] ?? null);
+        self::assertNotNull($completedOrder['completedAt'] ?? null);
+        self::assertSame(
+            ['pending_payment', 'paid', 'shipped', 'completed'],
+            array_column($completedOrder['statusHistory'] ?? [], 'to'),
+        );
+        self::assertFalse($completedOrder['availableActions']['confirmReceived'] ?? true);
+        self::assertSame(1, (int) $connection->fetchOne("SELECT COUNT(*) FROM shipments WHERE status = 'delivered'"));
+        self::assertSame('archived', $connection->fetchOne(
+            'SELECT status FROM collection_items WHERE id = :id',
+            ['id' => $soldItem->getId()->toRfc4122()],
+        ));
+        self::assertNotFalse($connection->fetchOne(
+            'SELECT removed_at FROM collection_item_location_history WHERE id = :id',
+            ['id' => $placement->getId()->toRfc4122()],
+        ));
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/me/orders/'.$orderId.'/confirm-received', $this->buyerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('invalid_order_transition', $this->responseData()['error']['code'] ?? null);
     }
 
     public function testCheckoutValidatesCartShippingAndAddress(): void

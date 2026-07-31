@@ -16,6 +16,7 @@ use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Entity\CollectionItemStatus;
 use App\Collection\Domain\Exception\ArchivedCollectionItemCannotBeChanged;
 use App\Collection\Domain\Exception\CardVariantDoesNotBelongToCard;
+use App\Collection\Domain\Exception\ListedCollectionItemCannotBeChanged;
 use App\Identity\Domain\Entity\User;
 use App\Shared\Domain\ValueObject\Money;
 use PHPUnit\Framework\TestCase;
@@ -86,6 +87,46 @@ final class CollectionItemTest extends TestCase
 
         // Act
         $item->changeCondition(CardCondition::Mint);
+
+        // Assert
+        // The expected domain exception is the observable result.
+    }
+
+    public function testCompletedSaleArchivesListedPhysicalItem(): void
+    {
+        // Arrange
+        [$card, $variant] = $this->createCard('Mudkip', '19/25');
+        $item = new CollectionItem(
+            owner: new User('owner@example.com', 'hash'),
+            catalogCard: $card,
+            variant: $variant,
+            language: CardLanguage::English,
+            condition: CardCondition::NearMint,
+        );
+        $item->markForSale();
+
+        // Act
+        $item->completeSale();
+
+        // Assert
+        self::assertSame(CollectionItemStatus::Archived, $item->getStatus());
+    }
+
+    public function testCannotCompleteSaleForUnlistedPhysicalItem(): void
+    {
+        // Arrange
+        [$card, $variant] = $this->createCard('Mudkip', '19/25');
+        $item = new CollectionItem(
+            owner: new User('owner@example.com', 'hash'),
+            catalogCard: $card,
+            variant: $variant,
+            language: CardLanguage::English,
+            condition: CardCondition::NearMint,
+        );
+        $this->expectException(ListedCollectionItemCannotBeChanged::class);
+
+        // Act
+        $item->completeSale();
 
         // Assert
         // The expected domain exception is the observable result.

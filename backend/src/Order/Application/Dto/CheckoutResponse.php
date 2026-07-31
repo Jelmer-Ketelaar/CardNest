@@ -28,7 +28,7 @@ final readonly class CheckoutResponse
                 'amount' => $this->payment->getAmount()->toArray(),
             ],
             'orders' => array_map(
-                static fn (Order $order): array => (new OrderResponse($order))->toArray(),
+                fn (Order $order): array => (new OrderResponse($order, $this->payment->getBuyer()))->toArray(),
                 $this->orders,
             ),
         ];

@@ -15,4 +15,8 @@ interface OrderRepository
     public function findForParticipant(User $participant): array;
 
     public function getForParticipant(string $id, User $participant): ?Order;
+
+    public function lockForSeller(string $id, User $seller): ?Order;
+
+    public function lockForBuyer(string $id, User $buyer): ?Order;
 }

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
+import BaseButton from '../components/BaseButton.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import type { ShippingMethodCode } from '../types/marketplace'
 import type { Order, OrderCollection } from '../types/order'
@@ -10,7 +11,9 @@ import { formatMoney } from '../utils/money'
 const route = useRoute()
 const orders = ref<Order[]>([])
 const loading = ref(false)
+const updatingOrderId = ref<string | null>(null)
 const error = ref('')
+const success = ref('')
 const completedCheckoutCount = computed(() => {
   const value = typeof route.query.checkedOut === 'string' ? Number.parseInt(route.query.checkedOut, 10) : 0
   return Number.isFinite(value) && value > 0 ? value : 0
@@ -56,6 +59,23 @@ async function loadOrders(): Promise<void> {
   }
 }
 
+async function updateOrder(order: Order, action: 'mark-shipped' | 'confirm-received'): Promise<void> {
+  updatingOrderId.value = order.id
+  error.value = ''
+  success.value = ''
+  try {
+    const updated = await apiRequest<Order>(`/me/orders/${order.id}/${action}`, { method: 'POST' })
+    orders.value = orders.value.map((current) => current.id === updated.id ? updated : current)
+    success.value = action === 'mark-shipped'
+      ? 'De order is als verzonden gemarkeerd.'
+      : 'Ontvangst bevestigd. De order is voltooid.'
+  } catch (caught) {
+    error.value = caughtMessage(caught, 'De orderstatus kon niet worden gewijzigd.')
+  } finally {
+    updatingOrderId.value = null
+  }
+}
+
 onMounted(() => { void loadOrders() })
 </script>
 
@@ -73,6 +93,7 @@ onMounted(() => { void loadOrders() })
     <p v-if="completedCheckoutCount" class="success-message" role="status">
       Testbetaling geslaagd. {{ completedCheckoutCount }} {{ completedCheckoutCount === 1 ? 'order is' : 'orders zijn' }} aangemaakt.
     </p>
+    <p v-if="success" class="success-message" role="status">{{ success }}</p>
     <ErrorMessage v-if="error" :message="error" />
     <p v-if="loading" class="empty-state" role="status">Orders laden…</p>
     <section v-else-if="orders.length === 0" class="empty-state">
@@ -91,6 +112,23 @@ onMounted(() => { void loadOrders() })
           </div>
           <strong>{{ formatMoney(order.costs.total.amount, order.costs.total.currency) }}</strong>
         </header>
+
+        <div v-if="order.availableActions.markShipped || order.availableActions.confirmReceived" class="order-card__actions">
+          <BaseButton
+            v-if="order.availableActions.markShipped"
+            :disabled="updatingOrderId === order.id"
+            @click="updateOrder(order, 'mark-shipped')"
+          >
+            {{ updatingOrderId === order.id ? 'Bijwerken…' : 'Markeer als verzonden' }}
+          </BaseButton>
+          <BaseButton
+            v-if="order.availableActions.confirmReceived"
+            :disabled="updatingOrderId === order.id"
+            @click="updateOrder(order, 'confirm-received')"
+          >
+            {{ updatingOrderId === order.id ? 'Bijwerken…' : 'Bevestig ontvangst' }}
+          </BaseButton>
+        </div>
 
         <ul class="order-items">
           <li v-for="item in order.items" :key="item.id">
@@ -126,6 +164,13 @@ onMounted(() => { void loadOrders() })
             <small v-if="order.payment.providerReference">Referentie {{ order.payment.providerReference }}</small>
           </div>
         </div>
+
+        <ol class="order-timeline" aria-label="Orderstatusgeschiedenis">
+          <li v-for="history in order.statusHistory" :key="history.id">
+            <strong>{{ statusLabel(history.to) }}</strong>
+            <time :datetime="history.occurredAt">{{ formattedDate(history.occurredAt) }}</time>
+          </li>
+        </ol>
       </article>
     </section>
   </main>

@@ -29,8 +29,10 @@ use App\Order\Domain\Exception\CartItemNotFound;
 use App\Order\Domain\Exception\EmptyCart;
 use App\Order\Domain\Exception\InvalidCart;
 use App\Order\Domain\Exception\InvalidOrder;
+use App\Order\Domain\Exception\InvalidOrderTransition;
 use App\Order\Domain\Exception\InvalidShippingSelection;
 use App\Payment\Domain\Exception\InvalidPayment;
+use App\Shipping\Domain\Exception\InvalidShipment;
 use App\Storage\Application\Exception\StorageLocationNotFound;
 use App\Storage\Domain\Exception\InvalidStorageHierarchy;
 use App\Storage\Domain\Exception\InvalidStorageTarget;
@@ -99,6 +101,8 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof InvalidCart => [409, 'invalid_cart', $exception->getMessage()],
             $exception instanceof InvalidShippingSelection => [422, 'invalid_shipping_selection', $exception->getMessage()],
             $exception instanceof OrderNotFound => [404, 'order_not_found', $exception->getMessage()],
+            $exception instanceof InvalidOrderTransition,
+            $exception instanceof InvalidShipment => [409, 'invalid_order_transition', $exception->getMessage()],
             $exception instanceof InvalidOrder,
             $exception instanceof InvalidPayment => [422, 'invalid_order', $exception->getMessage()],
             $exception instanceof PaymentFailed => [402, 'payment_failed', $exception->getMessage()],

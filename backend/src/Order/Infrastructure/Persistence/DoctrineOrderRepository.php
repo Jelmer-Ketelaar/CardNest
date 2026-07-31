@@ -7,6 +7,7 @@ namespace App\Order\Infrastructure\Persistence;
 use App\Identity\Domain\Entity\User;
 use App\Order\Domain\Entity\Order;
 use App\Order\Domain\Repository\OrderRepository;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -58,6 +59,16 @@ final readonly class DoctrineOrderRepository implements OrderRepository
         return $order;
     }
 
+    public function lockForSeller(string $id, User $seller): ?Order
+    {
+        return $this->lockForParty($id, 'seller', $seller);
+    }
+
+    public function lockForBuyer(string $id, User $buyer): ?Order
+    {
+        return $this->lockForParty($id, 'buyer', $buyer);
+    }
+
     private function detailQuery(): QueryBuilder
     {
         return $this->entityManager->createQueryBuilder()
@@ -74,6 +85,8 @@ final readonly class DoctrineOrderRepository implements OrderRepository
                 'card',
                 'cardSet',
                 'variant',
+                'history',
+                'historyActor',
             )
             ->from(Order::class, 'purchase')
             ->join('purchase.buyer', 'buyer')
@@ -86,6 +99,31 @@ final readonly class DoctrineOrderRepository implements OrderRepository
             ->join('listing.collectionItem', 'ownedItem')
             ->join('ownedItem.catalogCard', 'card')
             ->join('card.set', 'cardSet')
-            ->join('ownedItem.variant', 'variant');
+            ->join('ownedItem.variant', 'variant')
+            ->leftJoin('purchase.statusHistory', 'history')
+            ->leftJoin('history.actor', 'historyActor');
+    }
+
+    private function lockForParty(string $id, string $association, User $participant): ?Order
+    {
+        try {
+            $uuid = Uuid::fromString($id);
+        } catch (Throwable) {
+            return null;
+        }
+
+        /** @var Order|null $order */
+        $order = $this->entityManager->createQueryBuilder()
+            ->select('purchase')
+            ->from(Order::class, 'purchase')
+            ->where('purchase.id = :id')
+            ->andWhere('purchase.'.$association.' = :participant')
+            ->setParameter('id', $uuid, UuidType::NAME)
+            ->setParameter('participant', $participant)
+            ->getQuery()
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getOneOrNullResult();
+
+        return $order;
     }
 }

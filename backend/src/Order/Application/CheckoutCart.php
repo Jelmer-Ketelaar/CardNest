@@ -134,7 +134,9 @@ final readonly class CheckoutCart
             $payment->recordResult($result);
             $this->payments->add($payment);
             foreach ($orders as $order) {
+                $previousStatus = $order->getStatus();
                 $this->orderWorkflow->apply($order, 'payment_received');
+                $order->recordStatusTransition($previousStatus, $buyer);
             }
             foreach ($lockedListings as $listing) {
                 $this->listingWorkflow->apply($listing, 'sell');

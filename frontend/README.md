@@ -40,7 +40,9 @@ including the marketplace, remain usable without a session.
 The public marketplace can add an active listing to the authenticated user's cart. `/cart` renders seller groups,
 the server-calculated compatible shipping methods and complete totals, then submits one NL/BE address and exactly
 one shipping choice per seller. `/orders` shows both purchases and sales returned by the participant-scoped API.
-The fake checkout is labelled explicitly: the frontend never collects payment credentials.
+It renders the server-owned status timeline and only shows `Markeer als verzonden` to the seller of a paid order or
+`Bevestig ontvangst` to the buyer of a shipped order, based on the response DTO's `availableActions`. The fake
+checkout is labelled explicitly: the frontend never collects payment credentials.
 
 ## Adding a page or feature
 

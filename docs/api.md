@@ -509,7 +509,28 @@ The response contains the shared payment and every newly created seller order:
         "provider": "fake",
         "providerReference": "fake_220f2c32-698a-4548-8a38-6b0dd237a88b"
       },
+      "statusHistory": [
+        {
+          "id": "7fd13e4f-ad34-4f58-b1f7-60e3c95cb0d2",
+          "from": null,
+          "to": "pending_payment",
+          "actor": { "id": "f9774749-9c03-4cf1-9f66-40b6c1d1e9a4" },
+          "occurredAt": "2026-07-31T20:00:00+00:00"
+        },
+        {
+          "id": "1e81db2e-24d5-459d-a120-aa87191c585f",
+          "from": "pending_payment",
+          "to": "paid",
+          "actor": { "id": "f9774749-9c03-4cf1-9f66-40b6c1d1e9a4" },
+          "occurredAt": "2026-07-31T20:00:01+00:00"
+        }
+      ],
+      "availableActions": {
+        "markShipped": false,
+        "confirmReceived": false
+      },
       "paidAt": "2026-07-31T20:00:00+00:00",
+      "completedAt": null,
       "createdAt": "2026-07-31T20:00:00+00:00",
       "updatedAt": "2026-07-31T20:00:00+00:00"
     }
@@ -519,8 +540,22 @@ The response contains the shared payment and every newly created seller order:
 
 `GET /api/v1/me/orders` returns `{"items": [...], "total": 1}` for orders where the caller is buyer or seller.
 `GET /api/v1/me/orders/{id}` returns one such order. An unrelated user receives owner-safe
-`404 order_not_found`. Shipping, receipt confirmation, collection transfer, refunds and reviews are intentionally
-outside this increment; newly paid orders therefore remain in `paid`.
+`404 order_not_found`. Every order DTO contains immutable `statusHistory` entries with the transition actor and
+timestamp. `availableActions` is calculated for the authenticated participant; it is guidance for the UI, while
+the backend independently enforces the same ownership and transition rules.
+
+`POST /api/v1/me/orders/{id}/mark-shipped` is seller-only and changes a `paid` order to `shipped`. It creates the
+order's one shipment record and returns the updated order DTO. A buyer or unrelated user receives owner-safe
+`404 order_not_found`; a repeated or otherwise invalid transition returns `409 invalid_order_transition`.
+
+`POST /api/v1/me/orders/{id}/confirm-received` is buyer-only and changes a `shipped` order to `completed`. In the
+same transaction it marks the shipment delivered, archives every sold physical item in the seller's collection,
+and closes any current storage or binder placement while preserving its location history. A seller or unrelated
+user receives owner-safe `404 order_not_found`; an invalid repeat returns `409 invalid_order_transition`.
+
+Confirmation does not create a buyer-owned `CollectionItem`: checking the received condition and choosing a new
+storage location are intentionally a separate import flow. Refunds, cancellations and reviews also remain outside
+this increment.
 
 ## Closed vocabularies
 
@@ -539,6 +574,7 @@ outside this increment; newly paid orders therefore remain in `paid`.
 | Listing shipping method | `letter_mail`, `parcel`, `pickup` |
 | Listing reservation status | `active`, `completed`, `released`, `expired` |
 | Payment status | `pending`, `succeeded`, `failed`, `refunded` |
+| Shipment status | `shipped`, `delivered` |
 | Order status | `pending_payment`, `paid`, `preparing`, `shipped`, `delivered`, `completed`, `cancelled`, `refunded`, `disputed` |
 | Card set status | `announced`, `active`, `out_of_print`, `unknown` |
 
@@ -592,6 +628,7 @@ Every error response follows the same shape:
 | `invalid_shipping_selection` | 422 | Missing, extra, unsupported, or incompatible seller delivery choice |
 | `order_not_found` | 404 | Order doesn't exist or caller is neither its buyer nor seller |
 | `invalid_order` | 422 | Address, totals, currency, seller grouping, or payment data violates an invariant |
+| `invalid_order_transition` | 409 | Order or shipment is not in the required state for the requested participant action |
 | `payment_failed` | 402 | Payment provider rejected checkout; transaction was rolled back |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

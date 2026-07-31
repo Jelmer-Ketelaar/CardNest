@@ -67,3 +67,9 @@ framework:
                 payment_received:
                     from: pending_payment
                     to: paid
+                mark_shipped:
+                    from: paid
+                    to: shipped
+                confirm_received:
+                    from: shipped
+                    to: completed
