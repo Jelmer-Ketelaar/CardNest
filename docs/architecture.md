@@ -71,6 +71,8 @@ flowchart TD
     Binder[Binder: visual pages and slots]
     Wishlist[Wishlist: wanted cards and progress]
     Marketplace[Marketplace: fixed-price listings]
+    Order[Order: cart and seller orders]
+    Payment[Payment: provider-neutral charges]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -87,6 +89,12 @@ flowchart TD
     Marketplace --> Collection
     Marketplace --> Identity
     Marketplace --> Shared
+    Order --> Marketplace
+    Order --> Identity
+    Order --> Payment
+    Order --> Shared
+    Payment --> Identity
+    Payment --> Shared
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
@@ -100,10 +108,12 @@ flowchart TD
 | `Storage` | `storage_locations`, `collection_item_location_history` | `Collection` (physical item), `Identity` (owner) |
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
 | `Wishlist` | `wishlists`, `wishlist_items` | `Catalog` (wanted card/variant), `Collection` (matching physical items), `Identity` (owner), `Shared` (`Money`) |
-| `Marketplace` | `listings`, `listing_images`, `listing_shipping_methods`, `listing_price_history` | `Collection` (physical item), `Identity` (seller), `Shared` (`Money`) |
-| `Shared` | cross-cutting value objects and the API exception handler | — |
+| `Marketplace` | `listings`, `listing_images`, `listing_shipping_methods`, `listing_price_history`, `listing_reservations` | `Collection` (physical item), `Identity` (seller/buyer), `Shared` (`Money`) |
+| `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses` | `Marketplace` (listing/reservation), `Payment`, `Identity`, `Shared` |
+| `Payment` | `payments`, `payment_transactions`; the `PaymentProvider` port and fake adapter | `Identity` (buyer), `Shared` (`Money`) |
+| `Shared` | cross-cutting value objects, transaction port, and the API exception handler | — |
 
-Planned modules (`Order`, `Payment`, `Shipping`, `Review`, `Notification`, `Pricing`, `Moderation`, `Reporting`)
+Planned modules (`Shipping`, `Review`, `Notification`, `Pricing`, `Moderation`, `Reporting`)
 will slot in the same way, each adding one more layer of dependency on
 `Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
 
@@ -170,6 +180,41 @@ sequenceDiagram
 The database partial unique index is the final guard against two blocking listings for one physical card. Delayed
 expiration messages intentionally contain only the listing UUID: the handler reloads current state and is therefore
 safe when a seller cancels, clears or changes the expiration, or when a message is delivered twice.
+
+## Example flow: atomic multi-seller checkout
+
+```mermaid
+sequenceDiagram
+    participant Buyer
+    participant SPA as Vue SPA
+    participant Checkout as Order / CheckoutCart
+    participant DB as PostgreSQL
+    participant Provider as Fake PaymentProvider
+
+    Buyer->>SPA: Choose shipping per seller + address
+    SPA->>Checkout: POST /me/cart/checkout
+    Checkout->>DB: BEGIN; lock buyer/cart
+    Checkout->>DB: lock listing rows in UUID order
+    Checkout->>Checkout: revalidate availability and shipping intersections
+    Checkout->>DB: create active reservations, payment and one order/seller
+    Checkout->>Provider: charge(PaymentInstruction)
+    Provider-->>Checkout: succeeded(fake_reference)
+    Checkout->>DB: payment succeeded; orders paid; listings sold; reservations completed; cart cleared
+    Checkout->>DB: COMMIT
+    Checkout-->>SPA: shared payment + seller orders
+    SPA-->>Buyer: Paid orders and transparent totals
+```
+
+The buyer row serializes cart creation and mutation even before a cart exists. Listing rows are locked in a stable
+UUID order to reduce deadlock risk when two checkouts overlap. All changes, including the provider result, are
+persisted through `Shared\Domain\Transaction\TransactionManager`; any exception rolls the unit of work back and
+leaves every listing and cart item in its prior state. The provider call is inside this transaction only because the
+current adapter is deterministic and local. A real remote provider will require an explicit pending-payment and
+idempotent callback/outbox increment rather than holding a database transaction across network I/O.
+
+Cart delivery quotes are server-owned. For one seller, only methods supported by every listing are returned, and
+the group price is the maximum configured per-listing amount for that method. The browser submits seller UUID →
+method mappings, but checkout recalculates them and rejects missing, extra, or stale choices.
 
 ## Data conventions that hold across every module
 

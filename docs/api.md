@@ -365,6 +365,163 @@ Every shipping method in a listing response contains both its own `price` and th
 }
 ```
 
+## Cart, checkout and orders
+
+All endpoints in this section are protected. A user has one private cart. Adding an item does not reserve stock;
+availability and price are recalculated on every cart read and checked again under database locks at checkout.
+
+`GET /api/v1/me/cart` returns the cart grouped by seller. An empty cart has `id: null`, no groups, `itemCount: 0`,
+and `checkoutAvailable: false`. `POST /api/v1/me/cart/items` accepts `{"listingId": "<uuid>"}` and returns the
+updated cart with `201`. `DELETE /api/v1/me/cart/items/{id}` removes one owned cart item and returns the updated cart.
+
+```json
+{
+  "id": "2ff18db6-72d1-4fcf-af48-87f84d4ab4b2",
+  "sellerGroups": [
+    {
+      "seller": { "id": "e403dd7c-31f6-4782-a98f-5bcac431179c" },
+      "items": [
+        {
+          "id": "6d8974e7-2487-4516-b339-9fb2c1d96e50",
+          "listing": {
+            "id": "85fd006a-6748-440d-9dac-d238c749ead6",
+            "status": "active",
+            "seller": { "id": "e403dd7c-31f6-4782-a98f-5bcac431179c" },
+            "card": {
+              "id": "9ddf1d18-42ef-4a52-93d3-ef82e40fac19",
+              "name": "Mudkip",
+              "number": "19/25",
+              "set": { "id": "ccd6acdb-7c74-4b4b-820a-84eb61519b79", "name": "McDonald's Collection 2021" }
+            },
+            "language": "en",
+            "variant": "holo",
+            "condition": "near_mint",
+            "price": { "amount": 750, "currency": "EUR" },
+            "description": null,
+            "images": [
+              { "id": "18c8a87a-03db-485f-82c9-84273f334ec2", "side": "front", "url": "https://objects.example/front.jpg" },
+              { "id": "a897d212-47c9-468b-960c-781756ac897d", "side": "back", "url": "https://objects.example/back.jpg" }
+            ],
+            "shippingMethods": [
+              {
+                "code": "letter_mail",
+                "price": { "amount": 150, "currency": "EUR" },
+                "totalPrice": { "amount": 900, "currency": "EUR" }
+              }
+            ],
+            "priceHistory": [
+              {
+                "previousPrice": null,
+                "newPrice": { "amount": 750, "currency": "EUR" },
+                "changedAt": "2026-07-31T19:00:00+00:00"
+              }
+            ],
+            "expiresAt": null,
+            "publishedAt": "2026-07-31T19:00:00+00:00",
+            "createdAt": "2026-07-31T19:00:00+00:00",
+            "updatedAt": "2026-07-31T19:00:00+00:00"
+          },
+          "addedPrice": { "amount": 750, "currency": "EUR" },
+          "priceChanged": false,
+          "available": true,
+          "addedAt": "2026-07-31T20:00:00+00:00"
+        }
+      ],
+      "itemSubtotal": { "amount": 750, "currency": "EUR" },
+      "shippingMethods": [
+        {
+          "code": "letter_mail",
+          "price": { "amount": 150, "currency": "EUR" },
+          "totalPrice": { "amount": 900, "currency": "EUR" }
+        }
+      ]
+    }
+  ],
+  "itemCount": 1,
+  "checkoutAvailable": true
+}
+```
+
+For multiple cards from one seller, a delivery method is offered only when every listing supports it. Its combined
+shipping price is the highest shipping price configured on those listings, not the sum of all individual postage.
+`priceChanged` compares the current listing price with the price recorded when the item entered the cart.
+
+`POST /api/v1/me/cart/checkout` uses the fake provider and accepts exactly one delivery choice per seller plus an
+NL/BE address snapshot:
+
+```json
+{
+  "shippingMethods": {
+    "e403dd7c-31f6-4782-a98f-5bcac431179c": "letter_mail"
+  },
+  "fullName": "Sam Collector",
+  "addressLine1": "Dorpsstraat 1",
+  "addressLine2": null,
+  "postalCode": "1234 AB",
+  "city": "Utrecht",
+  "countryCode": "NL"
+}
+```
+
+The checkout locks the buyer/cart first and then listing rows in UUID order. It revalidates ownership,
+availability, expiration, seller grouping and shipping choices; creates a temporary reservation per listing, one
+payment for the complete checkout and one order per seller; runs the replaceable fake `PaymentProvider`; and marks
+the payment, orders, reservations and listings complete in one database transaction. A validation, availability or
+payment failure rolls back every change and leaves the cart intact. The current fake provider succeeds immediately,
+so reservation records finish as `completed` in the same request. It never receives card or bank credentials.
+
+The response contains the shared payment and every newly created seller order:
+
+```json
+{
+  "payment": {
+    "id": "220f2c32-698a-4548-8a38-6b0dd237a88b",
+    "status": "succeeded",
+    "provider": "fake",
+    "providerReference": "fake_220f2c32-698a-4548-8a38-6b0dd237a88b",
+    "amount": { "amount": 900, "currency": "EUR" }
+  },
+  "orders": [
+    {
+      "id": "e6152016-56cb-45d3-9c69-3f8b3edb0152",
+      "status": "paid",
+      "buyer": { "id": "f9774749-9c03-4cf1-9f66-40b6c1d1e9a4" },
+      "seller": { "id": "e403dd7c-31f6-4782-a98f-5bcac431179c" },
+      "items": [],
+      "shippingMethod": "letter_mail",
+      "costs": {
+        "items": { "amount": 750, "currency": "EUR" },
+        "shipping": { "amount": 150, "currency": "EUR" },
+        "serviceFee": { "amount": 0, "currency": "EUR" },
+        "total": { "amount": 900, "currency": "EUR" }
+      },
+      "shippingAddress": {
+        "fullName": "Sam Collector",
+        "addressLine1": "Dorpsstraat 1",
+        "addressLine2": null,
+        "postalCode": "1234 AB",
+        "city": "Utrecht",
+        "countryCode": "NL"
+      },
+      "payment": {
+        "id": "220f2c32-698a-4548-8a38-6b0dd237a88b",
+        "status": "succeeded",
+        "provider": "fake",
+        "providerReference": "fake_220f2c32-698a-4548-8a38-6b0dd237a88b"
+      },
+      "paidAt": "2026-07-31T20:00:00+00:00",
+      "createdAt": "2026-07-31T20:00:00+00:00",
+      "updatedAt": "2026-07-31T20:00:00+00:00"
+    }
+  ]
+}
+```
+
+`GET /api/v1/me/orders` returns `{"items": [...], "total": 1}` for orders where the caller is buyer or seller.
+`GET /api/v1/me/orders/{id}` returns one such order. An unrelated user receives owner-safe
+`404 order_not_found`. Shipping, receipt confirmation, collection transfer, refunds and reviews are intentionally
+outside this increment; newly paid orders therefore remain in `paid`.
+
 ## Closed vocabularies
 
 | Concept | Values |
@@ -380,6 +537,9 @@ Every shipping method in a listing response contains both its own `price` and th
 | Listing status | `draft`, `pending_review`, `active`, `reserved`, `sold`, `cancelled`, `expired`, `suspended` |
 | Listing image side | `front`, `back` |
 | Listing shipping method | `letter_mail`, `parcel`, `pickup` |
+| Listing reservation status | `active`, `completed`, `released`, `expired` |
+| Payment status | `pending`, `succeeded`, `failed`, `refunded` |
+| Order status | `pending_payment`, `paid`, `preparing`, `shipped`, `delivered`, `completed`, `cancelled`, `refunded`, `disputed` |
 | Card set status | `announced`, `active`, `out_of_print`, `unknown` |
 
 ## Errors
@@ -424,5 +584,14 @@ Every error response follows the same shape:
 | `listing_already_exists` | 409 | Physical item already has a blocking listing |
 | `invalid_listing_transition` | 409 | Listing workflow does not allow the requested action |
 | `invalid_listing` | 422 | Price, expiration, photos, shipping, or physical-item state violates a listing rule |
+| `own_listing_purchase` | 409 | Buyer attempted to add or purchase their own listing |
+| `listing_unavailable` | 409 | Listing was sold, reserved, cancelled, expired, or otherwise changed before checkout |
+| `cart_item_not_found` | 404 | Cart item doesn't exist in the caller's cart |
+| `cart_empty` | 409 | Checkout was requested without cart items |
+| `invalid_cart` | 409 | Duplicate listing or cart-size invariant was violated |
+| `invalid_shipping_selection` | 422 | Missing, extra, unsupported, or incompatible seller delivery choice |
+| `order_not_found` | 404 | Order doesn't exist or caller is neither its buyer nor seller |
+| `invalid_order` | 422 | Address, totals, currency, seller grouping, or payment data violates an invariant |
+| `payment_failed` | 402 | Payment provider rejected checkout; transaction was rolled back |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

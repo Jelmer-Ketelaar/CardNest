@@ -15,6 +15,7 @@ use App\Marketplace\Domain\Repository\ListingSearchCriteria;
 use App\Marketplace\Domain\Repository\ListingSearchResult;
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -113,6 +114,30 @@ final readonly class DoctrineListingRepository implements ListingRepository
             ->getOneOrNullResult();
 
         return $listing;
+    }
+
+    public function lockForCheckout(array $ids): array
+    {
+        sort($ids);
+        $listings = [];
+        foreach (array_values(array_unique($ids)) as $id) {
+            $uuid = $this->parseUuid($id);
+            if (!$uuid instanceof Uuid) {
+                continue;
+            }
+
+            $listing = $this->entityManager->find(Listing::class, $uuid);
+            if (!$listing instanceof Listing) {
+                continue;
+            }
+
+            // Refresh after acquiring the row lock so a cart loaded just before
+            // another checkout cannot continue with a stale active status.
+            $this->entityManager->refresh($listing, LockMode::PESSIMISTIC_WRITE);
+            $listings[] = $listing;
+        }
+
+        return $listings;
     }
 
     public function hasBlockingListing(CollectionItem $item, ?Listing $except = null): bool

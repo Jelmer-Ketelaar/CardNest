@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
@@ -7,6 +8,7 @@ import ErrorMessage from '../components/ErrorMessage.vue'
 import { useAuthStore } from '../stores/auth'
 import type { PaginatedResponse } from '../types/api'
 import type { Listing, ListingImage } from '../types/marketplace'
+import type { Cart } from '../types/order'
 import { formatMoney, parseOptionalMinorUnits } from '../utils/money'
 
 const languages = [
@@ -19,13 +21,16 @@ const conditions = [
 ] as const
 
 const auth = useAuthStore()
+const router = useRouter()
 const listings = ref<Listing[]>([])
 const selectedListing = ref<Listing | null>(null)
 const total = ref(0)
 const totalPages = ref(0)
 const page = ref(1)
 const loading = ref(false)
+const addingListingId = ref<string | null>(null)
 const error = ref('')
+const success = ref('')
 const filters = reactive({ cardName: '', language: '', condition: '', maximumPrice: '', pickupAllowed: false })
 
 function caughtMessage(caught: unknown, fallback: string): string {
@@ -85,10 +90,34 @@ async function goToPage(target: number): Promise<void> {
 
 async function openListing(id: string): Promise<void> {
   error.value = ''
+  success.value = ''
   try {
     selectedListing.value = await apiRequest<Listing>(`/listings/${id}`)
   } catch (caught) {
     error.value = caughtMessage(caught, 'De listing kon niet worden geopend.')
+  }
+}
+
+async function addToCart(listing: Listing): Promise<void> {
+  if (!auth.isAuthenticated) {
+    await router.push({ name: 'login' })
+    return
+  }
+
+  addingListingId.value = listing.id
+  error.value = ''
+  success.value = ''
+  try {
+    const cart = await apiRequest<Cart>('/me/cart/items', {
+      method: 'POST',
+      body: JSON.stringify({ listingId: listing.id }),
+    })
+    selectedListing.value = null
+    success.value = `${listing.card.name} is toegevoegd. Je winkelmand bevat nu ${cart.itemCount} ${cart.itemCount === 1 ? 'kaart' : 'kaarten'}.`
+  } catch (caught) {
+    error.value = caughtMessage(caught, 'De aanbieding kon niet aan je winkelmand worden toegevoegd.')
+  } finally {
+    addingListingId.value = null
   }
 }
 
@@ -103,15 +132,19 @@ onMounted(() => { void loadListings() })
         <h1>Marktplaats</h1>
         <p>Vergelijk altijd de kaartprijs én verzendkosten. Iedere aanbieding hoort bij één fysieke kaart.</p>
       </div>
-      <RouterLink
-        class="button button--primary inline-button"
-        :to="auth.isAuthenticated ? { name: 'my-listings' } : { name: 'login' }"
-      >
-        {{ auth.isAuthenticated ? 'Mijn verkoop' : 'Inloggen om te verkopen' }}
-      </RouterLink>
+      <div class="page-heading__actions">
+        <RouterLink v-if="auth.isAuthenticated" class="button button--secondary" :to="{ name: 'cart' }">Winkelmand</RouterLink>
+        <RouterLink
+          class="button button--primary"
+          :to="auth.isAuthenticated ? { name: 'my-listings' } : { name: 'login' }"
+        >
+          {{ auth.isAuthenticated ? 'Mijn verkoop' : 'Inloggen om te verkopen' }}
+        </RouterLink>
+      </div>
     </header>
 
     <ErrorMessage v-if="error" :message="error" />
+    <p v-if="success" class="success-message" role="status">{{ success }}</p>
 
     <form class="panel panel--wide marketplace-filters" @submit.prevent="applyFilters">
       <BaseInput id="marketplace-name" v-model="filters.cardName" label="Kaartnaam" type="search" />
@@ -187,6 +220,9 @@ onMounted(() => { void loadListings() })
         </ul>
         <div class="dialog-actions">
           <BaseButton variant="secondary" @click="selectedListing = null">Sluiten</BaseButton>
+          <BaseButton :disabled="addingListingId === selectedListing.id" @click="addToCart(selectedListing)">
+            {{ addingListingId === selectedListing.id ? 'Toevoegen…' : (auth.isAuthenticated ? 'In winkelmand' : 'Inloggen om te kopen') }}
+          </BaseButton>
         </div>
       </section>
     </div>

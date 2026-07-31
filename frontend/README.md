@@ -37,6 +37,11 @@ derived `isAuthenticated` flag. The token is persisted in `localStorage` under `
 what `router/index.ts`'s navigation guard checks for routes marked `meta: { requiresAuth: true }`. Public routes,
 including the marketplace, remain usable without a session.
 
+The public marketplace can add an active listing to the authenticated user's cart. `/cart` renders seller groups,
+the server-calculated compatible shipping methods and complete totals, then submits one NL/BE address and exactly
+one shipping choice per seller. `/orders` shows both purchases and sales returned by the participant-scoped API.
+The fake checkout is labelled explicitly: the frontend never collects payment credentials.
+
 ## Adding a page or feature
 
 1. Add a `types/<area>.ts` file with interfaces that mirror the backend response DTO for that area (see

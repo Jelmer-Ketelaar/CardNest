@@ -97,7 +97,9 @@ final class ListingApiTest extends WebTestCase
 
         // Assert
         self::assertResponseIsSuccessful();
-        self::assertSame('for_sale', $this->responseData()['status'] ?? null);
+        $collectionItem = $this->responseData();
+        self::assertSame('for_sale', $collectionItem['status'] ?? null);
+        self::assertSame(2, $collectionItem['duplicate']['ownedQuantity'] ?? null);
     }
 
     public function testOnlySellerCanChangeListingAndPriceChangesAreLogged(): void

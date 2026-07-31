@@ -2,9 +2,11 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DashboardPage from '../pages/DashboardPage.vue'
 import CollectionPage from '../pages/CollectionPage.vue'
 import BindersPage from '../pages/BindersPage.vue'
+import CartPage from '../pages/CartPage.vue'
 import LoginPage from '../pages/LoginPage.vue'
 import MarketplacePage from '../pages/MarketplacePage.vue'
 import MyListingsPage from '../pages/MyListingsPage.vue'
+import OrdersPage from '../pages/OrdersPage.vue'
 import RegistrationPage from '../pages/RegistrationPage.vue'
 import StoragePage from '../pages/StoragePage.vue'
 import WishlistsPage from '../pages/WishlistsPage.vue'
@@ -22,6 +24,8 @@ export const router = createRouter({
     { path: '/binders', name: 'binders', component: BindersPage, meta: { requiresAuth: true } },
     { path: '/wishlists', name: 'wishlists', component: WishlistsPage, meta: { requiresAuth: true } },
     { path: '/my-listings', name: 'my-listings', component: MyListingsPage, meta: { requiresAuth: true } },
+    { path: '/cart', name: 'cart', component: CartPage, meta: { requiresAuth: true } },
+    { path: '/orders', name: 'orders', component: OrdersPage, meta: { requiresAuth: true } },
   ],
 })
 

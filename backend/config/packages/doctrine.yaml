@@ -56,6 +56,18 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Marketplace/Domain/Entity'
                 prefix: 'App\Marketplace\Domain\Entity'
                 alias: Marketplace
+            Order:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Order/Domain/Entity'
+                prefix: 'App\Order\Domain\Entity'
+                alias: Order
+            Payment:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Payment/Domain/Entity'
+                prefix: 'App\Payment\Domain\Entity'
+                alias: Payment
 
 when@test:
     doctrine:

@@ -7,6 +7,7 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    env(CART_RESERVATION_MINUTES): '15'
 
 services:
     # default configuration for services in *this* file
@@ -58,6 +59,24 @@ services:
 
     App\Marketplace\Domain\Repository\ListingRepository:
         alias: App\Marketplace\Infrastructure\Persistence\DoctrineListingRepository
+
+    App\Marketplace\Domain\Repository\ListingReservationRepository:
+        alias: App\Marketplace\Infrastructure\Persistence\DoctrineListingReservationRepository
+
+    App\Order\Domain\Repository\ShoppingCartRepository:
+        alias: App\Order\Infrastructure\Persistence\DoctrineShoppingCartRepository
+
+    App\Order\Domain\Repository\OrderRepository:
+        alias: App\Order\Infrastructure\Persistence\DoctrineOrderRepository
+
+    App\Payment\Domain\Repository\PaymentRepository:
+        alias: App\Payment\Infrastructure\Persistence\DoctrinePaymentRepository
+
+    App\Payment\Domain\Provider\PaymentProvider:
+        alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
+
+    App\Shared\Domain\Transaction\TransactionManager:
+        alias: App\Shared\Infrastructure\Persistence\DoctrineTransactionManager
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

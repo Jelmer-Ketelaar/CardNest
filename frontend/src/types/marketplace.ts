@@ -1,5 +1,7 @@
 import type { Money } from './collection'
 
+export type ShippingMethodCode = 'letter_mail' | 'parcel' | 'pickup'
+
 export interface ListingImage {
   id: string
   side: 'front' | 'back'
@@ -7,7 +9,7 @@ export interface ListingImage {
 }
 
 export interface ListingShippingMethod {
-  code: 'letter_mail' | 'parcel' | 'pickup'
+  code: ShippingMethodCode
   price: Money
   totalPrice: Money
 }

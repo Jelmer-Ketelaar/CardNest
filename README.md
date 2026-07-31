@@ -117,10 +117,25 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Schedule optional expiration through Redis-backed Symfony Messenger; an idempotent worker closes the listing and
   releases its physical card when the end time arrives
 
+### Cart, checkout and orders (Order + Payment modules)
+
+- Add active listings from multiple sellers to one private cart; duplicate entries and buying your own listing are
+  rejected by the backend
+- Group cards per seller and expose only delivery methods supported by every card in that group. Combined postage is
+  the highest configured price for the selected method, never an unexplained per-card sum
+- Lock the cart and every listing in a deterministic order during checkout, so competing buyers cannot purchase the
+  same physical card and a failure rolls the entire checkout back
+- Split one checkout into one immutable order per seller while keeping one shared payment and an address snapshot
+  per order; all amounts remain integer EUR minor units
+- Use a replaceable `PaymentProvider` interface with a fake development adapter that succeeds immediately and never
+  asks for or stores card or bank details
+- Keep completed reservation and payment-transaction records for traceability, and expose only orders in which the
+  caller is the buyer or seller
+
 ### Frontend
 
 - Vue 3 + TypeScript single-page app: a public marketplace plus authenticated registration, login, dashboard,
-  collection, storage, visual binder, wishlist and seller-listing pages
+  collection, storage, visual binder, wishlist, seller-listing, cart, checkout and order pages
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
 - A typed API client with structured error handling, a Pinia store for authentication state, and small utilities
   (e.g. money formatting for minor-unit amounts)
@@ -139,10 +154,10 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Cart, Order & Payment** — shopping cart and checkout, temporary stock reservations, a fake payment provider for
-  development, and the full order lifecycle
-- **Shipping, Review, Notification, Pricing, Moderation, Reporting** — supporting modules around the above
-  (shipment tracking, buyer/seller reviews, price history, fraud signals, financial reporting, ...)
+- **Shipping & order completion** — preparing/shipped/received transitions, delivery tracking, collection transfer,
+  cancellations and refunds
+- **Review, Notification, Pricing, Moderation, Reporting** — supporting modules around the marketplace
+  (buyer/seller reviews, alerts, price history, fraud signals, financial reporting, ...)
 
 Trading, real payments, auctions, price negotiation, automated card scanning, grading submissions, sealed products,
 and international shipping are explicitly out of scope for the MVP described in the product specification.
@@ -186,6 +201,8 @@ flowchart TD
     Binder[Binder: visual pages, slots, placeholders]
     Wishlist[Wishlist: wanted cards and fulfillment]
     Marketplace[Marketplace: fixed-price listings]
+    Order[Order: cart, reservations, seller orders]
+    Payment[Payment: provider-neutral payments]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -202,13 +219,19 @@ flowchart TD
     Marketplace --> Collection
     Marketplace --> Identity
     Marketplace --> Shared
+    Order --> Marketplace
+    Order --> Identity
+    Order --> Payment
+    Order --> Shared
+    Payment --> Identity
+    Payment --> Shared
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
 ```
 
 Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Marketplace`,
-`Shared`. Planned modules follow the same shape (see "What's not built yet" above). For a deeper walkthrough — including a
+`Order`, `Payment`, `Shared`. Planned modules follow the same shape (see "What's not built yet" above). For a deeper walkthrough — including a
 request-sequence diagram and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
 
 ## Tech stack
@@ -252,6 +275,9 @@ expiration messages. To load the optional twenty-card development catalog into a
 ```bash
 docker compose exec backend php bin/console doctrine:fixtures:load --no-interaction
 ```
+
+`CART_RESERVATION_MINUTES` defaults to `15` and accepts `1`–`60`. It defines the reservation expiry recorded during
+checkout; the current fake provider succeeds synchronously, so those reservations complete immediately.
 
 Run the main quality checks with:
 

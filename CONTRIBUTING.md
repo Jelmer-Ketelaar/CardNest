@@ -28,7 +28,8 @@ These carry through every module, existing or future:
 - **External integrations sit behind an interface** with a fake/local implementation usable in development and
   tests (see `EmailVerificationSender`). Don't call a third-party API directly from application code.
 - **Every non-trivial business rule has a test** that fails without the code that enforces it.
-- **Reservations, payments and orders (once those modules exist) must use database transactions.**
+- **Reservations, payments and orders use database transactions.** Keep external providers behind an interface and
+  preserve the deterministic row-lock order used by `CheckoutCart`.
 
 ## Project layout
 
@@ -45,7 +46,8 @@ default skeleton (kept empty on purpose so Symfony Flex recipes don't recreate t
 module directory as shown above. `backend/src/Shared` holds cross-cutting building blocks (`Money`, the API
 exception handler) that any module may depend on, but that must never depend back on a specific module.
 
-Implemented modules today: `Identity`, `Catalog`, `Collection`, `Shared`.
+Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Marketplace`,
+`Order`, `Payment`, `Shared`.
 
 ## Adding a new module or endpoint
 

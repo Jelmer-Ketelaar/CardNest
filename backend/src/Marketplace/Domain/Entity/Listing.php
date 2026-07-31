@@ -7,8 +7,10 @@ namespace App\Marketplace\Domain\Entity;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Entity\CollectionItemStatus;
 use App\Identity\Domain\Entity\User;
+use App\Marketplace\Domain\Exception\CannotPurchaseOwnListing;
 use App\Marketplace\Domain\Exception\InvalidListing;
 use App\Marketplace\Domain\Exception\InvalidListingTransition;
+use App\Marketplace\Domain\Exception\ListingUnavailable;
 use App\Marketplace\Domain\ValueObject\ListingPhotoReference;
 use App\Marketplace\Domain\ValueObject\ShippingOption;
 use App\Shared\Domain\ValueObject\Money;
@@ -79,14 +81,17 @@ final class Listing
     /**
      * @param list<ShippingOption>        $shippingOptions
      * @param list<ListingPhotoReference> $photos
+     *
+     * ORM-mapped constructor fields are intentionally not readonly: checkout
+     * refreshes this aggregate after acquiring its pessimistic row lock
      */
     public function __construct(
         #[ORM\ManyToOne(targetEntity: User::class)]
         #[ORM\JoinColumn(name: 'seller_id', nullable: false, onDelete: 'RESTRICT')]
-        private readonly User $seller,
+        private User $seller,
         #[ORM\ManyToOne(targetEntity: CollectionItem::class)]
         #[ORM\JoinColumn(name: 'collection_item_id', nullable: false, onDelete: 'RESTRICT')]
-        private readonly CollectionItem $collectionItem,
+        private CollectionItem $collectionItem,
         Money $price,
         array $shippingOptions,
         array $photos,
@@ -97,7 +102,7 @@ final class Listing
         #[ORM\Column(length: 30, enumType: ListingStatus::class)]
         private ListingStatus $status = ListingStatus::Draft,
         #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
-        private readonly DateTimeImmutable $createdAt = new DateTimeImmutable(),
+        private DateTimeImmutable $createdAt = new DateTimeImmutable(),
     ) {
         if (!$seller->getId()->equals($collectionItem->getOwner()->getId())) {
             throw new InvalidListing('Alleen de eigenaar kan een collectiekaart aanbieden.');
@@ -291,6 +296,33 @@ final class Listing
         if (!in_array($this->status, [ListingStatus::Draft, ListingStatus::Active], true)) {
             throw new InvalidListingTransition('Deze listing kan niet worden geannuleerd.');
         }
+    }
+
+    public function assertPurchasableBy(User $buyer, DateTimeImmutable $now = new DateTimeImmutable()): void
+    {
+        if ($buyer->getId()->equals($this->seller->getId())) {
+            throw new CannotPurchaseOwnListing('Je kunt je eigen listing niet kopen.');
+        }
+        if (!$this->isAvailableAt($now)) {
+            throw new ListingUnavailable('Deze listing is niet meer beschikbaar.');
+        }
+    }
+
+    public function isAvailableAt(DateTimeImmutable $now = new DateTimeImmutable()): bool
+    {
+        return $this->status === ListingStatus::Active
+            && ($this->expiresAt === null || $this->expiresAt > $now);
+    }
+
+    public function shippingPriceFor(ShippingMethodCode $code): ?Money
+    {
+        foreach ($this->shippingMethods as $shippingMethod) {
+            if ($shippingMethod->getCode() === $code) {
+                return $shippingMethod->getPrice();
+            }
+        }
+
+        return null;
     }
 
     private function setInitialPrice(Money $price): void

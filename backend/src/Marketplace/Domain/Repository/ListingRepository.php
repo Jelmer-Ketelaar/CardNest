@@ -21,6 +21,13 @@ interface ListingRepository
 
     public function getForSeller(string $id, User $seller): ?Listing;
 
+    /**
+     * @param list<string> $ids
+     *
+     * @return list<Listing>
+     */
+    public function lockForCheckout(array $ids): array;
+
     public function hasBlockingListing(CollectionItem $item, ?Listing $except = null): bool;
 
     public function save(Listing $listing): void;

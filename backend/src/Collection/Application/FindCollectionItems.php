@@ -48,7 +48,7 @@ final readonly class FindCollectionItems
     {
         $item = $this->findOwnedItem($owner, $id);
         $counts = $this->collectionItems->duplicateCounts($owner);
-        $quantity = $item->getStatus() === CollectionItemStatus::InCollection
+        $quantity = $item->getStatus() !== CollectionItemStatus::Archived
             ? $counts[$item->duplicateKey()] ?? 1
             : 0;
 

@@ -18,9 +18,19 @@ use App\Collection\Domain\Exception\ListedCollectionItemCannotBeChanged;
 use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\InvalidCredentials;
 use App\Marketplace\Application\Exception\ListingNotFound;
+use App\Marketplace\Domain\Exception\CannotPurchaseOwnListing;
 use App\Marketplace\Domain\Exception\InvalidListing;
 use App\Marketplace\Domain\Exception\InvalidListingTransition;
 use App\Marketplace\Domain\Exception\ListingAlreadyExists;
+use App\Marketplace\Domain\Exception\ListingUnavailable;
+use App\Order\Application\Exception\OrderNotFound;
+use App\Order\Application\Exception\PaymentFailed;
+use App\Order\Domain\Exception\CartItemNotFound;
+use App\Order\Domain\Exception\EmptyCart;
+use App\Order\Domain\Exception\InvalidCart;
+use App\Order\Domain\Exception\InvalidOrder;
+use App\Order\Domain\Exception\InvalidShippingSelection;
+use App\Payment\Domain\Exception\InvalidPayment;
 use App\Storage\Application\Exception\StorageLocationNotFound;
 use App\Storage\Domain\Exception\InvalidStorageHierarchy;
 use App\Storage\Domain\Exception\InvalidStorageTarget;
@@ -81,7 +91,17 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof ListingNotFound => [404, 'listing_not_found', $exception->getMessage()],
             $exception instanceof ListingAlreadyExists => [409, 'listing_already_exists', $exception->getMessage()],
             $exception instanceof InvalidListingTransition => [409, 'invalid_listing_transition', $exception->getMessage()],
+            $exception instanceof CannotPurchaseOwnListing => [409, 'own_listing_purchase', $exception->getMessage()],
+            $exception instanceof ListingUnavailable => [409, 'listing_unavailable', $exception->getMessage()],
             $exception instanceof InvalidListing => [422, 'invalid_listing', $exception->getMessage()],
+            $exception instanceof CartItemNotFound => [404, 'cart_item_not_found', $exception->getMessage()],
+            $exception instanceof EmptyCart => [409, 'cart_empty', $exception->getMessage()],
+            $exception instanceof InvalidCart => [409, 'invalid_cart', $exception->getMessage()],
+            $exception instanceof InvalidShippingSelection => [422, 'invalid_shipping_selection', $exception->getMessage()],
+            $exception instanceof OrderNotFound => [404, 'order_not_found', $exception->getMessage()],
+            $exception instanceof InvalidOrder,
+            $exception instanceof InvalidPayment => [422, 'invalid_order', $exception->getMessage()],
+            $exception instanceof PaymentFailed => [402, 'payment_failed', $exception->getMessage()],
             $exception instanceof HttpExceptionInterface => [$exception->getStatusCode(), 'request_failed', $exception->getMessage()],
             default => [500, 'internal_error', 'Er is een onverwachte fout opgetreden.'],
         };

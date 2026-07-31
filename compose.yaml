@@ -11,6 +11,7 @@ services:
       APP_SECRET: ${APP_SECRET:-dev-secret-change-me}
       DATABASE_URL: ${DATABASE_URL:-postgresql://cardnest:cardnest@postgres:5432/cardnest?serverVersion=16&charset=utf8}
       MESSENGER_TRANSPORT_DSN: ${REDIS_URL:-redis://redis:6379}/messages
+      CART_RESERVATION_MINUTES: ${CART_RESERVATION_MINUTES:-15}
     volumes:
       - ./backend:/app
     ports:
@@ -57,6 +58,7 @@ services:
       APP_SECRET: ${APP_SECRET:-dev-secret-change-me}
       DATABASE_URL: ${DATABASE_URL:-postgresql://cardnest:cardnest@postgres:5432/cardnest?serverVersion=16&charset=utf8}
       MESSENGER_TRANSPORT_DSN: ${REDIS_URL:-redis://redis:6379}/messages
+      CART_RESERVATION_MINUTES: ${CART_RESERVATION_MINUTES:-15}
     volumes:
       - ./backend:/app
     restart: unless-stopped

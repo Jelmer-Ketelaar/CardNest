@@ -45,3 +45,25 @@ framework:
                 suspend:
                     from: [pending_review, active]
                     to: suspended
+        order:
+            type: state_machine
+            marking_store:
+                type: method
+                property: workflowStatus
+            supports:
+                - App\Order\Domain\Entity\Order
+            initial_marking: pending_payment
+            places:
+                - pending_payment
+                - paid
+                - preparing
+                - shipped
+                - delivered
+                - completed
+                - cancelled
+                - refunded
+                - disputed
+            transitions:
+                payment_received:
+                    from: pending_payment
+                    to: paid
