@@ -1,8 +1,8 @@
 # CardNest
 
-CardNest is a modular-monolith foundation for a trading-card collection platform. This first increment contains
-identity, authentication, the Vue shell, infrastructure and quality checks only. Catalog, collection and marketplace
-features are intentionally out of scope.
+CardNest is a modular-monolith trading-card collection platform. The implemented increments currently cover identity,
+authentication, the public card catalog, the Vue shell, infrastructure and quality checks. User-owned collections and
+marketplace features are implemented in later increments.
 
 ## Requirements
 
@@ -20,6 +20,7 @@ docker compose run --rm --no-deps frontend npm install
 docker compose up -d postgres redis
 docker compose run --rm backend php bin/console doctrine:database:create --if-not-exists
 docker compose run --rm backend php bin/console doctrine:migrations:migrate --no-interaction
+docker compose run --rm backend php bin/console doctrine:fixtures:load --append
 docker compose up backend frontend
 ```
 
@@ -51,3 +52,7 @@ The backend is one Symfony application divided into modules with `Domain`, `Appl
 Authentication uses random bearer tokens; only SHA-256 hashes are stored, tokens expire after 30 days and logout
 deletes the active token. E-mail delivery is represented by an interface and asynchronous message, with a safe local
 logging adapter until a real provider is selected.
+
+The Catalog module keeps official card data separate from future user-owned physical cards. Its read API supports
+PostgreSQL-backed filtering and pagination behind repository interfaces. Development fixtures use generated
+placeholders instead of protected card artwork.

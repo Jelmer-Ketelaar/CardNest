@@ -30,15 +30,30 @@ final class CatalogCard
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    private readonly Uuid $id;
+    private Uuid $id;
 
     #[ORM\Column(name: 'number_sort_key', length: 160)]
     private readonly string $numberSortKey;
 
     /** @var Collection<int, CardVariant> */
-    #[ORM\OneToMany(mappedBy: 'catalogCard', targetEntity: CardVariant::class, cascade: ['persist'], orphanRemoval: true)]
+    #[ORM\OneToMany(
+        mappedBy: 'catalogCard',
+        targetEntity: CardVariant::class,
+        cascade: ['persist'],
+        orphanRemoval: true,
+    )]
     private Collection $variants;
 
+    /** @var Collection<int, CardExternalReference> */
+    #[ORM\OneToMany(
+        mappedBy: 'catalogCard',
+        targetEntity: CardExternalReference::class,
+        cascade: ['persist'],
+        orphanRemoval: true,
+    )]
+    private Collection $externalReferences;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $updatedAt;
 
     /** @param array<string, mixed> $metadata */
@@ -74,6 +89,7 @@ final class CatalogCard
         $this->id = Uuid::v7();
         $this->numberSortKey = CardNumberSortKey::generate($number);
         $this->variants = new ArrayCollection();
+        $this->externalReferences = new ArrayCollection();
         $this->updatedAt = $createdAt;
     }
 
@@ -171,6 +187,36 @@ final class CatalogCard
     public function getVariants(): Collection
     {
         return $this->variants;
+    }
+
+    /** @param array<string, mixed> $rawData */
+    public function addExternalReference(
+        string $sourceName,
+        string $externalId,
+        array $rawData = [],
+    ): CardExternalReference {
+        foreach ($this->externalReferences as $existing) {
+            if ($existing->getSourceName() === $sourceName && $existing->getExternalId() === $externalId) {
+                $message = sprintf(
+                    'External reference "%s:%s" is already registered for this card.',
+                    $sourceName,
+                    $externalId,
+                );
+
+                throw new LogicException($message);
+            }
+        }
+
+        $reference = new CardExternalReference($this, $sourceName, $externalId, $rawData);
+        $this->externalReferences->add($reference);
+
+        return $reference;
+    }
+
+    /** @return Collection<int, CardExternalReference> */
+    public function getExternalReferences(): Collection
+    {
+        return $this->externalReferences;
     }
 
     public function getCreatedAt(): DateTimeImmutable

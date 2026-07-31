@@ -22,8 +22,9 @@ final class CardSet
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    private readonly Uuid $id;
+    private Uuid $id;
 
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $updatedAt;
 
     public function __construct(

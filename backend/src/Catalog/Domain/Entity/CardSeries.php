@@ -21,7 +21,7 @@ final class CardSeries
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    private readonly Uuid $id;
+    private Uuid $id;
 
     public function __construct(
         #[ORM\Column(length: 180)]

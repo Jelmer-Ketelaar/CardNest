@@ -23,7 +23,7 @@ final class CardExternalReference
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    private readonly Uuid $id;
+    private Uuid $id;
 
     /** @var array<string, mixed>|null */
     #[ORM\Column(name: 'corrected_data', type: Types::JSONB, nullable: true)]
@@ -32,11 +32,12 @@ final class CardExternalReference
     #[ORM\Column(name: 'last_synced_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $lastSyncedAt = null;
 
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $updatedAt;
 
     /** @param array<string, mixed> $rawData */
     public function __construct(
-        #[ORM\ManyToOne(targetEntity: CatalogCard::class)]
+        #[ORM\ManyToOne(targetEntity: CatalogCard::class, inversedBy: 'externalReferences')]
         #[ORM\JoinColumn(name: 'catalog_card_id', nullable: false, onDelete: 'CASCADE')]
         private readonly CatalogCard $catalogCard,
         #[ORM\Column(name: 'source_name', length: 100)]

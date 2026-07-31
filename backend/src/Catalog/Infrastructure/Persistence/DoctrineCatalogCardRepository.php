@@ -68,11 +68,15 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
         }
 
         if (null !== $criteria->name && '' !== trim($criteria->name)) {
-            $qb->andWhere('LOWER(c.name) LIKE :name')->setParameter('name', '%'.mb_strtolower(trim($criteria->name)).'%');
+            $qb
+                ->andWhere('LOWER(c.name) LIKE :name')
+                ->setParameter('name', '%'.mb_strtolower(trim($criteria->name)).'%');
         }
 
         if (null !== $criteria->number && '' !== trim($criteria->number)) {
-            $qb->andWhere('LOWER(c.number) LIKE :number')->setParameter('number', '%'.mb_strtolower(trim($criteria->number)).'%');
+            $qb
+                ->andWhere('LOWER(c.number) LIKE :number')
+                ->setParameter('number', '%'.mb_strtolower(trim($criteria->number)).'%');
         }
 
         if (null !== $criteria->rarity && '' !== trim($criteria->rarity)) {

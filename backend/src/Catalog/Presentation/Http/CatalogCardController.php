@@ -8,6 +8,7 @@ use App\Catalog\Application\CatalogCardFinder;
 use App\Catalog\Application\Dto\CatalogCardResponse;
 use App\Catalog\Application\Dto\SearchCatalogCardsRequest;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
@@ -18,7 +19,8 @@ final readonly class CatalogCardController
     #[Route('', methods: ['GET'])]
     public function search(
         CatalogCardFinder $finder,
-        #[MapQueryString] SearchCatalogCardsRequest $request = new SearchCatalogCardsRequest(),
+        #[MapQueryString(validationFailedStatusCode: Response::HTTP_UNPROCESSABLE_ENTITY)]
+        SearchCatalogCardsRequest $request = new SearchCatalogCardsRequest(),
     ): JsonResponse {
         return new JsonResponse($finder->search($request)->toArray());
     }

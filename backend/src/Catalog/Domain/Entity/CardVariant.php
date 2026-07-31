@@ -22,7 +22,7 @@ final class CardVariant
 {
     #[ORM\Id]
     #[ORM\Column(type: UuidType::NAME, unique: true)]
-    private readonly Uuid $id;
+    private Uuid $id;
 
     public function __construct(
         #[ORM\ManyToOne(targetEntity: CatalogCard::class, inversedBy: 'variants')]

@@ -8,6 +8,7 @@ use App\Catalog\Application\CardSetFinder;
 use App\Catalog\Application\Dto\CardSetResponse;
 use App\Catalog\Application\Dto\ListCardSetsRequest;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
@@ -18,7 +19,8 @@ final readonly class CardSetController
     #[Route('', methods: ['GET'])]
     public function list(
         CardSetFinder $finder,
-        #[MapQueryString] ListCardSetsRequest $request = new ListCardSetsRequest(),
+        #[MapQueryString(validationFailedStatusCode: Response::HTTP_UNPROCESSABLE_ENTITY)]
+        ListCardSetsRequest $request = new ListCardSetsRequest(),
     ): JsonResponse {
         return new JsonResponse($finder->list($request)->toArray());
     }
