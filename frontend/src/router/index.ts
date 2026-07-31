@@ -9,6 +9,7 @@ import MyListingsPage from '../pages/MyListingsPage.vue'
 import OrdersPage from '../pages/OrdersPage.vue'
 import RegistrationPage from '../pages/RegistrationPage.vue'
 import StoragePage from '../pages/StoragePage.vue'
+import UserProfilePage from '../pages/UserProfilePage.vue'
 import WishlistsPage from '../pages/WishlistsPage.vue'
 
 export const router = createRouter({
@@ -18,6 +19,7 @@ export const router = createRouter({
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/register', name: 'register', component: RegistrationPage },
     { path: '/marketplace', name: 'marketplace', component: MarketplacePage },
+    { path: '/users/:id', name: 'user-profile', component: UserProfilePage },
     { path: '/dashboard', name: 'dashboard', component: DashboardPage, meta: { requiresAuth: true } },
     { path: '/collection', name: 'collection', component: CollectionPage, meta: { requiresAuth: true } },
     { path: '/storage', name: 'storage', component: StoragePage, meta: { requiresAuth: true } },

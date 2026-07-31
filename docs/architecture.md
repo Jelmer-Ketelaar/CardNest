@@ -74,6 +74,7 @@ flowchart TD
     Order[Order: cart and seller orders]
     Payment[Payment: provider-neutral charges]
     Shipping[Shipping: dispatch and receipt confirmation]
+    Review[Review: transaction feedback and reputation]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -101,6 +102,8 @@ flowchart TD
     Shipping --> Storage
     Shipping --> Identity
     Shipping --> Shared
+    Review --> Order
+    Review --> Identity
     Payment --> Identity
     Payment --> Shared
     Catalog --> Shared
@@ -120,9 +123,10 @@ flowchart TD
 | `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses`, `order_status_history`; one-time buyer collection import | `Marketplace` (listing/reservation), `Payment`, `Collection` (buyer item/wishlist hook), `Storage` (optional placement), `Identity`, `Shared` |
 | `Payment` | `payments`, `payment_transactions`; the `PaymentProvider` port and fake adapter | `Identity` (buyer), `Shared` (`Money`) |
 | `Shipping` | `shipments`; seller dispatch, buyer receipt confirmation, and sold-item archival | `Order`, `Collection`, `Storage`, `Identity`, `Shared` |
+| `Review` | `reviews`; participant feedback and public aggregate reputation | `Order` (completed transaction), `Identity` (reviewer and reviewed user) |
 | `Shared` | cross-cutting value objects, transaction port, and the API exception handler | — |
 
-Planned modules (`Review`, `Notification`, `Pricing`, `Moderation`, `Reporting`)
+Planned modules (`Notification`, `Pricing`, `Moderation`, `Reporting`)
 will slot in the same way, each adding one more layer of dependency on
 `Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
 
@@ -266,6 +270,18 @@ its destination. The later import locks the same buyer order, derives card, vari
 the order, and stores the imported collection-item reference directly on the order item. Nullable-pair constraints
 keep the reference and timestamp consistent, while the domain rule and order lock make the operation one-time.
 The source item remains archived, preserving the seller's acquisition data and closed location history.
+
+## Review consistency and public reputation
+
+`Review\Application\CreateReview` locks the participant-scoped order before checking for an existing review. This
+serializes simultaneous attempts by the same participant; a unique `(order_id, reviewer_id)` index remains the
+database backstop. The domain entity independently requires a completed order, derives an exact participant pair,
+and validates every 1–5 score. The application service determines the reviewed counterparty server-side, so a
+caller cannot redirect a valid transaction review to an unrelated account.
+
+Authored-review responses include the order id so the private order UI can suppress a second form. Public
+reputation responses use the same response DTO without that field, combine PostgreSQL averages with paginated
+reviews, and expose no order or payment references.
 
 ## Data conventions that hold across every module
 

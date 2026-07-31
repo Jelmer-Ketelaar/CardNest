@@ -140,10 +140,21 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Offer each completed order item to the buyer exactly once: card, variant and paid item price are reused from the
   order, while the buyer confirms language, received condition, notes and an optional owner-checked storage location
 
+### Reviews and reputation (Review module)
+
+- Let both participants review the other participant after an order is completed, with one immutable review per
+  participant and order
+- Capture an overall score plus description accuracy, packaging, communication and shipping speed on fixed 1–5
+  scales, with an optional comment
+- Derive the reviewed user from the authenticated participant and order instead of trusting a caller-supplied user id
+- Serialize concurrent review attempts with an order lock and enforce uniqueness, distinct users, score ranges and
+  comment length again in PostgreSQL
+- Expose authored reviews privately and a paginated public reputation summary without disclosing transaction ids
+
 ### Frontend
 
-- Vue 3 + TypeScript single-page app: a public marketplace plus authenticated registration, login, dashboard,
-  collection, storage, visual binder, wishlist, seller-listing, cart, checkout and order pages
+- Vue 3 + TypeScript single-page app: a public marketplace and reputation profiles plus authenticated registration,
+  login, dashboard, collection, storage, visual binder, wishlist, seller-listing, cart, checkout and order pages
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
 - A typed API client with structured error handling, a Pinia store for authentication state, and small utilities
   (e.g. money formatting for minor-unit amounts)
@@ -163,8 +174,8 @@ Everything below belongs to the product specification but is intentionally not i
 its own module, in roughly this order:
 
 - **Cancellations and refunds** — add reversible post-payment failure paths separately from successful fulfillment
-- **Review, Notification, Pricing, Moderation, Reporting** — supporting modules around the marketplace
-  (buyer/seller reviews, alerts, price history, fraud signals, financial reporting, ...)
+- **Notification, Pricing, Moderation, Reporting** — supporting modules around the marketplace
+  (alerts, price history, fraud signals, financial reporting, ...)
 
 Trading, real payments, auctions, price negotiation, automated card scanning, grading submissions, sealed products,
 and international shipping are explicitly out of scope for the MVP described in the product specification.
@@ -211,6 +222,7 @@ flowchart TD
     Order[Order: cart, reservations, seller orders]
     Payment[Payment: provider-neutral payments]
     Shipping[Shipping: dispatch and receipt confirmation]
+    Review[Review: transaction feedback and reputation]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -238,6 +250,8 @@ flowchart TD
     Shipping --> Storage
     Shipping --> Identity
     Shipping --> Shared
+    Review --> Order
+    Review --> Identity
     Payment --> Identity
     Payment --> Shared
     Catalog --> Shared
@@ -246,7 +260,8 @@ flowchart TD
 ```
 
 Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Marketplace`,
-`Order`, `Payment`, `Shipping`, `Shared`. Planned modules follow the same shape (see "What's not built yet" above).
+`Order`, `Payment`, `Shipping`, `Review`, `Shared`. Planned modules follow the same shape (see "What's not built
+yet" above).
 For a deeper walkthrough — including a
 request-sequence diagram and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
 

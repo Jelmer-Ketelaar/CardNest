@@ -44,7 +44,9 @@ It renders the server-owned status timeline and only shows `Markeer als verzonde
 `Bevestig ontvangst` to the buyer of a shipped order, based on the response DTO's `availableActions`. The fake
 checkout is labelled explicitly: the frontend never collects payment credentials. After completion, the buyer can
 open an item-level import dialog to confirm language and condition, optionally select an owned storage location,
-and add the purchase once without re-entering catalog, variant, or price data.
+and add the purchase once without re-entering catalog, variant, or price data. Either participant can then submit
+one scored review from that order; the order page loads authored reviews to prevent offering the form twice. Public
+seller-profile routes show aggregate reputation and paginated review comments without exposing private order ids.
 
 ## Adding a page or feature
 

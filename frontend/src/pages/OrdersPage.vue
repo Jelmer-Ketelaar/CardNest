@@ -6,6 +6,7 @@ import BaseButton from '../components/BaseButton.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import type { ShippingMethodCode } from '../types/marketplace'
 import type { Order, OrderCollection, OrderItem } from '../types/order'
+import type { Review, ReviewCollection } from '../types/review'
 import type { StorageLocation, StorageLocationCollectionResponse } from '../types/storage'
 import { formatMoney } from '../utils/money'
 
@@ -25,11 +26,22 @@ const loading = ref(false)
 const updatingOrderId = ref<string | null>(null)
 const importingItemId = ref<string | null>(null)
 const importTarget = ref<{ order: Order; item: OrderItem } | null>(null)
+const reviewTarget = ref<Order | null>(null)
+const submittingReview = ref(false)
+const reviewedOrderIds = ref<Set<string>>(new Set())
 const storageLocations = ref<StorageLocation[]>([])
 const storageLoaded = ref(false)
 const error = ref('')
 const success = ref('')
 const importForm = reactive({ language: 'en', condition: 'near_mint', storageLocationId: '', notes: '' })
+const reviewForm = reactive({
+  overallScore: 5,
+  descriptionAccuracyScore: 5,
+  packagingScore: 5,
+  communicationScore: 5,
+  shippingSpeedScore: 5,
+  comment: '',
+})
 const completedCheckoutCount = computed(() => {
   const value = typeof route.query.checkedOut === 'string' ? Number.parseInt(route.query.checkedOut, 10) : 0
   return Number.isFinite(value) && value > 0 ? value : 0
@@ -66,12 +78,67 @@ async function loadOrders(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const response = await apiRequest<OrderCollection>('/me/orders')
-    orders.value = response.items
+    const [orderResponse, reviewResponse] = await Promise.all([
+      apiRequest<OrderCollection>('/me/orders'),
+      apiRequest<ReviewCollection>('/me/reviews'),
+    ])
+    orders.value = orderResponse.items
+    reviewedOrderIds.value = new Set(
+      reviewResponse.items.flatMap((review) => review.orderId ? [review.orderId] : []),
+    )
   } catch (caught) {
     error.value = caughtMessage(caught, 'Je orders konden niet worden geladen.')
   } finally {
     loading.value = false
+  }
+}
+
+function canReview(order: Order): boolean {
+  return order.status === 'completed' && !reviewedOrderIds.value.has(order.id)
+}
+
+function openReview(order: Order): void {
+  reviewTarget.value = order
+  reviewForm.overallScore = 5
+  reviewForm.descriptionAccuracyScore = 5
+  reviewForm.packagingScore = 5
+  reviewForm.communicationScore = 5
+  reviewForm.shippingSpeedScore = 5
+  reviewForm.comment = ''
+}
+
+function closeReview(): void {
+  reviewTarget.value = null
+}
+
+async function submitReview(): Promise<void> {
+  const target = reviewTarget.value
+  if (!target) return
+
+  submittingReview.value = true
+  error.value = ''
+  success.value = ''
+  const payload = {
+    overallScore: reviewForm.overallScore,
+    descriptionAccuracyScore: reviewForm.descriptionAccuracyScore,
+    packagingScore: reviewForm.packagingScore,
+    communicationScore: reviewForm.communicationScore,
+    shippingSpeedScore: reviewForm.shippingSpeedScore,
+    comment: reviewForm.comment.trim() || null,
+  }
+
+  try {
+    await apiRequest<Review>(`/me/orders/${target.id}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    reviewedOrderIds.value = new Set([...reviewedOrderIds.value, target.id])
+    success.value = 'Je review is geplaatst.'
+    closeReview()
+  } catch (caught) {
+    error.value = caughtMessage(caught, 'Je review kon niet worden geplaatst.')
+  } finally {
+    submittingReview.value = false
   }
 }
 
@@ -179,7 +246,10 @@ onMounted(() => { void loadOrders() })
           <strong>{{ formatMoney(order.costs.total.amount, order.costs.total.currency) }}</strong>
         </header>
 
-        <div v-if="order.availableActions.markShipped || order.availableActions.confirmReceived" class="order-card__actions">
+        <div
+          v-if="order.availableActions.markShipped || order.availableActions.confirmReceived || order.status === 'completed'"
+          class="order-card__actions"
+        >
           <BaseButton
             v-if="order.availableActions.markShipped"
             :disabled="updatingOrderId === order.id"
@@ -194,6 +264,10 @@ onMounted(() => { void loadOrders() })
           >
             {{ updatingOrderId === order.id ? 'Bijwerken…' : 'Bevestig ontvangst' }}
           </BaseButton>
+          <BaseButton v-if="canReview(order)" variant="secondary" @click="openReview(order)">
+            Schrijf review
+          </BaseButton>
+          <span v-else-if="order.status === 'completed'" class="badge">Review geplaatst</span>
         </div>
 
         <ul class="order-items">
@@ -289,6 +363,56 @@ onMounted(() => { void loadOrders() })
             <BaseButton variant="secondary" @click="closeCollectionImport">Annuleren</BaseButton>
             <BaseButton type="submit" :disabled="importingItemId === importTarget.item.id">
               {{ importingItemId === importTarget.item.id ? 'Toevoegen…' : 'Bevestig en voeg toe' }}
+            </BaseButton>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div v-if="reviewTarget" class="modal-backdrop" @click.self="closeReview">
+      <section class="panel edit-panel review-panel" role="dialog" aria-modal="true" aria-labelledby="review-heading">
+        <p class="eyebrow">Voltooide transactie</p>
+        <h2 id="review-heading">Review plaatsen</h2>
+        <p>Beoordeel de andere deelnemer van order {{ reviewTarget.id.slice(0, 8) }}.</p>
+        <form class="edit-form review-form" @submit.prevent="submitReview">
+          <label class="field">
+            <span>Algemene score</span>
+            <select v-model.number="reviewForm.overallScore" required>
+              <option v-for="score in 5" :key="score" :value="score">{{ score }} / 5</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Beschrijving correct</span>
+            <select v-model.number="reviewForm.descriptionAccuracyScore" required>
+              <option v-for="score in 5" :key="score" :value="score">{{ score }} / 5</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Verpakking</span>
+            <select v-model.number="reviewForm.packagingScore" required>
+              <option v-for="score in 5" :key="score" :value="score">{{ score }} / 5</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Communicatie</span>
+            <select v-model.number="reviewForm.communicationScore" required>
+              <option v-for="score in 5" :key="score" :value="score">{{ score }} / 5</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Verzendsnelheid</span>
+            <select v-model.number="reviewForm.shippingSpeedScore" required>
+              <option v-for="score in 5" :key="score" :value="score">{{ score }} / 5</option>
+            </select>
+          </label>
+          <label class="field review-form__comment">
+            <span>Toelichting (optioneel)</span>
+            <textarea v-model="reviewForm.comment" rows="4" maxlength="2000" />
+          </label>
+          <div class="dialog-actions review-form__actions">
+            <BaseButton variant="secondary" @click="closeReview">Annuleren</BaseButton>
+            <BaseButton type="submit" :disabled="submittingReview">
+              {{ submittingReview ? 'Plaatsen…' : 'Plaats review' }}
             </BaseButton>
           </div>
         </form>

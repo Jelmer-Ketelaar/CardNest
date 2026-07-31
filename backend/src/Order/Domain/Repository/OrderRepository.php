@@ -19,4 +19,6 @@ interface OrderRepository
     public function lockForSeller(string $id, User $seller): ?Order;
 
     public function lockForBuyer(string $id, User $buyer): ?Order;
+
+    public function lockForParticipant(string $id, User $participant): ?Order;
 }

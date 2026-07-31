@@ -69,6 +69,29 @@ final readonly class DoctrineOrderRepository implements OrderRepository
         return $this->lockForParty($id, 'buyer', $buyer);
     }
 
+    public function lockForParticipant(string $id, User $participant): ?Order
+    {
+        try {
+            $uuid = Uuid::fromString($id);
+        } catch (Throwable) {
+            return null;
+        }
+
+        /** @var Order|null $order */
+        $order = $this->entityManager->createQueryBuilder()
+            ->select('purchase')
+            ->from(Order::class, 'purchase')
+            ->where('purchase.id = :id')
+            ->andWhere('purchase.buyer = :participant OR purchase.seller = :participant')
+            ->setParameter('id', $uuid, UuidType::NAME)
+            ->setParameter('participant', $participant)
+            ->getQuery()
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->getOneOrNullResult();
+
+        return $order;
+    }
+
     private function detailQuery(): QueryBuilder
     {
         return $this->entityManager->createQueryBuilder()

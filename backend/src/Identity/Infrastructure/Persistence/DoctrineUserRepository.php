@@ -7,11 +7,34 @@ namespace App\Identity\Infrastructure\Persistence;
 use App\Identity\Domain\Entity\User;
 use App\Identity\Domain\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Uid\Uuid;
+use Throwable;
 
 final readonly class DoctrineUserRepository implements UserRepository
 {
     public function __construct(private EntityManagerInterface $entityManager)
     {
+    }
+
+    public function findById(string $id): ?User
+    {
+        try {
+            $uuid = Uuid::fromString($id);
+        } catch (Throwable) {
+            return null;
+        }
+
+        /** @var User|null $user */
+        $user = $this->entityManager->createQueryBuilder()
+            ->select('user')
+            ->from(User::class, 'user')
+            ->where('user.id = :id')
+            ->setParameter('id', $uuid, UuidType::NAME)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $user;
     }
 
     public function findByEmail(string $email): ?User

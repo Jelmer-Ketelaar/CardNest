@@ -1,4 +1,14 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function mockAuthoredReviews(page: Page, items: object[] = []): Promise<void> {
+  await page.route(/\/api\/v1\/me\/reviews$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items, total: items.length }),
+    })
+  })
+}
 
 function actionableOrder(status: 'paid' | 'shipped' | 'completed') {
   const now = new Date().toISOString()
@@ -210,6 +220,7 @@ test('a collector can add a listing and complete a split-ready test checkout', a
   await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
   })
+  await mockAuthoredReviews(page)
 
   await page.goto('/marketplace')
   await page.getByRole('button', { name: 'Bekijk aanbieding' }).click()
@@ -252,6 +263,7 @@ test('a seller can mark a paid order as shipped', async ({ page }) => {
   await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
   })
+  await mockAuthoredReviews(page)
   await page.route(new RegExp(`/api/v1/me/orders/${order.id}/mark-shipped$`), async (route) => {
     expect(route.request().method()).toBe('POST')
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(shippedOrder) })
@@ -282,6 +294,7 @@ test('a buyer can confirm a shipped order as received', async ({ page }) => {
   await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
   })
+  await mockAuthoredReviews(page)
   await page.route(new RegExp(`/api/v1/me/orders/${order.id}/confirm-received$`), async (route) => {
     expect(route.request().method()).toBe('POST')
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(completedOrder) })
@@ -317,6 +330,7 @@ test('a buyer confirms condition and storage before importing a purchase', async
   await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
   })
+  await mockAuthoredReviews(page)
   await page.route(/\/api\/v1\/me\/storage-locations$/, async (route) => {
     await route.fulfill({
       status: 200,
@@ -358,5 +372,59 @@ test('a buyer confirms condition and storage before importing a purchase', async
     condition: 'excellent',
     storageLocationId: locationId,
     notes: 'Gecontroleerd na ontvangst.',
+  })
+})
+
+test('an order participant can review a completed transaction once', async ({ page }) => {
+  const order = actionableOrder('completed')
+  let reviewPayload: Record<string, unknown> | null = null
+
+  await page.addInitScript(() => localStorage.setItem('cardnest.authToken', 'buyer-token'))
+  await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
+  })
+  await mockAuthoredReviews(page)
+  await page.route(new RegExp(`/api/v1/me/orders/${order.id}/reviews$`), async (route) => {
+    reviewPayload = route.request().postDataJSON() as Record<string, unknown>
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: crypto.randomUUID(),
+        orderId: order.id,
+        reviewer: order.buyer,
+        reviewedUser: order.seller,
+        scores: {
+          overall: 5,
+          descriptionAccuracy: 4,
+          packaging: 5,
+          communication: 4,
+          shippingSpeed: 3,
+        },
+        comment: 'Netjes verpakt en duidelijk gecommuniceerd.',
+        createdAt: new Date().toISOString(),
+      }),
+    })
+  })
+
+  await page.goto('/orders')
+  await page.getByRole('button', { name: 'Schrijf review' }).click()
+  await expect(page.getByRole('dialog', { name: 'Review plaatsen' })).toBeVisible()
+  await page.getByLabel('Beschrijving correct').selectOption('4')
+  await page.getByLabel('Communicatie').selectOption('4')
+  await page.getByLabel('Verzendsnelheid').selectOption('3')
+  await page.getByLabel('Toelichting (optioneel)').fill('Netjes verpakt en duidelijk gecommuniceerd.')
+  await page.getByRole('button', { name: 'Plaats review' }).click()
+
+  await expect(page.getByText('Je review is geplaatst.')).toBeVisible()
+  await expect(page.getByText('Review geplaatst')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Schrijf review' })).toHaveCount(0)
+  expect(reviewPayload).toEqual({
+    overallScore: 5,
+    descriptionAccuracyScore: 4,
+    packagingScore: 5,
+    communicationScore: 4,
+    shippingSpeedScore: 3,
+    comment: 'Netjes verpakt en duidelijk gecommuniceerd.',
   })
 })

@@ -74,6 +74,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Shipping/Domain/Entity'
                 prefix: 'App\Shipping\Domain\Entity'
                 alias: Shipping
+            Review:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Review/Domain/Entity'
+                prefix: 'App\Review\Domain\Entity'
+                alias: Review
 
 when@test:
     doctrine:

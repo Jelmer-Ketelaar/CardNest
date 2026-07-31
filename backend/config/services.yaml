@@ -78,6 +78,9 @@ services:
     App\Shipping\Domain\Repository\ShipmentRepository:
         alias: App\Shipping\Infrastructure\Persistence\DoctrineShipmentRepository
 
+    App\Review\Domain\Repository\ReviewRepository:
+        alias: App\Review\Infrastructure\Persistence\DoctrineReviewRepository
+
     App\Shared\Domain\Transaction\TransactionManager:
         alias: App\Shared\Infrastructure\Persistence\DoctrineTransactionManager
 

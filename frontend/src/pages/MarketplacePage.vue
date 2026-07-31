@@ -204,6 +204,11 @@ onMounted(() => { void loadListings() })
         <p class="eyebrow">{{ selectedListing.card.set.name }}</p>
         <h2 id="listing-detail-heading">{{ selectedListing.card.name }} · {{ selectedListing.card.number }}</h2>
         <p>{{ selectedListing.description ?? 'Geen aanvullende omschrijving.' }}</p>
+        <p>
+          <RouterLink :to="{ name: 'user-profile', params: { id: selectedListing.seller.id } }">
+            Bekijk reputatie van deze verkoper
+          </RouterLink>
+        </p>
         <dl class="card-facts">
           <div><dt>Taal</dt><dd>{{ selectedListing.language.toUpperCase() }}</dd></div>
           <div><dt>Variant</dt><dd>{{ readableCode(selectedListing.variant) }}</dd></div>

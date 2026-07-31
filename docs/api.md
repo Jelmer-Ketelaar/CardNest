@@ -1,7 +1,7 @@
 # CardNest API v1
 
 All responses use JSON. Protected endpoints expect `Authorization: Bearer <token>`. Only health checks, registration,
-login, read-only catalog endpoints, and read-only active marketplace listings are public.
+login, read-only catalog endpoints, active marketplace listings, and public reputation profiles are public.
 
 Validation errors always return `422` with the shape shown in [Errors](#errors). Ownership is enforced on every
 protected endpoint: trying to read or change a record you don't own behaves exactly like it doesn't exist (`404`),
@@ -587,7 +587,79 @@ The seller's source record remains archived for sale and purchase history. The u
 
 A seller or unrelated user receives owner-safe `404 order_not_found`; a foreign storage location returns
 `404 storage_location_not_found`; a pre-completion or repeated import returns `409 invalid_collection_import`.
-Refunds, cancellations and reviews remain outside this increment.
+Refunds and cancellations remain outside this increment.
+
+## Reviews and public reputation
+
+`POST /api/v1/me/orders/{orderId}/reviews` lets the authenticated buyer or seller review the other participant after
+the order is `completed`. The reviewed user is derived from the order; callers cannot provide or redirect it. Each
+participant can submit exactly one immutable review per order.
+
+```json
+{
+  "overallScore": 5,
+  "descriptionAccuracyScore": 5,
+  "packagingScore": 4,
+  "communicationScore": 5,
+  "shippingSpeedScore": 4,
+  "comment": "Correct beschreven en zorgvuldig verpakt."
+}
+```
+
+All five scores are required integers from 1 through 5. `comment` is optional, trimmed, and limited to 2,000
+characters. The endpoint returns `201` with the review DTO, including its `orderId` for the caller's private UI.
+An unrelated participant receives owner-safe `404 order_not_found`; a non-completed order returns
+`409 invalid_review`; a second review by the same participant returns `409 review_already_exists`.
+
+`GET /api/v1/me/reviews` returns the caller's authored reviews as `{"items": [...], "total": 1}`. These private
+items include `orderId`, allowing the order page to show whether its review has already been submitted.
+
+`GET /api/v1/users/{userId}/reputation?page=1&perPage=20` is public and returns aggregate scores plus paginated
+reviews received by that user:
+
+```json
+{
+  "user": {
+    "id": "e403dd7c-31f6-4782-a98f-5bcac431179c",
+    "memberSince": "2026-07-20T10:00:00+00:00"
+  },
+  "summary": {
+    "reviewCount": 1,
+    "averageOverall": 5,
+    "averages": {
+      "descriptionAccuracy": 5,
+      "packaging": 4,
+      "communication": 5,
+      "shippingSpeed": 4
+    }
+  },
+  "reviews": {
+    "items": [
+      {
+        "id": "a2c3244a-a69d-49c4-98e8-838384a14ef2",
+        "reviewer": { "id": "f9774749-9c03-4cf1-9f66-40b6c1d1e9a4" },
+        "reviewedUser": { "id": "e403dd7c-31f6-4782-a98f-5bcac431179c" },
+        "scores": {
+          "overall": 5,
+          "descriptionAccuracy": 5,
+          "packaging": 4,
+          "communication": 5,
+          "shippingSpeed": 4
+        },
+        "comment": "Correct beschreven en zorgvuldig verpakt.",
+        "createdAt": "2026-07-31T20:00:00+00:00"
+      }
+    ],
+    "page": 1,
+    "perPage": 20,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+
+Public review items deliberately omit `orderId`; no payment, address, listing, or other transaction reference is
+exposed. Unknown users return `404 user_not_found`. `page` must be positive and `perPage` must be between 1 and 100.
 
 ## Closed vocabularies
 
@@ -663,6 +735,9 @@ Every error response follows the same shape:
 | `invalid_order` | 422 | Address, totals, currency, seller grouping, or payment data violates an invariant |
 | `invalid_order_transition` | 409 | Order or shipment is not in the required state for the requested participant action |
 | `invalid_collection_import` | 409 | Order item is not completed, was already imported, or cannot preserve its card/variant identity |
+| `user_not_found` | 404 | Public reputation was requested for an unknown user |
+| `review_already_exists` | 409 | Caller already reviewed this order |
+| `invalid_review` | 409 | Order is incomplete, participant pairing is invalid, or a review invariant was violated |
 | `payment_failed` | 402 | Payment provider rejected checkout; transaction was rolled back |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |
