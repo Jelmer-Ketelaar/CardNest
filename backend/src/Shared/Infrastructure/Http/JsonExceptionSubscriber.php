@@ -6,6 +6,7 @@ namespace App\Shared\Infrastructure\Http;
 
 use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\InvalidCredentials;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,6 +18,10 @@ use Throwable;
 #[AsEventListener(event: 'kernel.exception')]
 final readonly class JsonExceptionSubscriber
 {
+    public function __construct(private LoggerInterface $logger)
+    {
+    }
+
     public function __invoke(ExceptionEvent $event): void
     {
         if (!str_starts_with($event->getRequest()->getPathInfo(), '/api/')) {
@@ -30,6 +35,10 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof HttpExceptionInterface => [$exception->getStatusCode(), 'request_failed', $exception->getMessage()],
             default => [500, 'internal_error', 'Er is een onverwachte fout opgetreden.'],
         };
+
+        if ($status >= Response::HTTP_INTERNAL_SERVER_ERROR) {
+            $this->logger->error('Unhandled API exception.', ['exception' => $exception]);
+        }
 
         $details = $this->validationDetails($exception);
         $error = ['code' => $code, 'message' => '' !== $message ? $message : Response::$statusTexts[$status]];
