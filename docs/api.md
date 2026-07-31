@@ -102,6 +102,10 @@ individually (condition, purchase, storage, sale status can all diverge later).
 
 Returns `201` with `{"items": [...], "created": <n>}`.
 
+After the collection items are constructed, every matching open wishlist goal is fulfilled by one unit per
+physical item, capped at its desired quantity. The wishlist changes and new collection rows are flushed together;
+an item only matches a configured maximum price when its purchase price was supplied.
+
 `GET /api/v1/me/collection-items/{id}` returns one owned item, or `404 collection_item_not_found`.
 
 `PATCH /api/v1/me/collection-items/{id}` partially updates an item — omitted fields are left untouched. Purchase
@@ -235,6 +239,48 @@ matching catalog card and otherwise returns `409 binder_slot_reserved`. `DELETE
 A catalog-card placeholder reserves a missing card slot without inventing a physical `CollectionItem`. Layout
 strategies are stored as planner intent; automatic rearrangement is not part of this endpoint set.
 
+## Wishlists
+
+Protected (`ROLE_USER`) and owner-scoped. A wishlist records collection goals; a `WishlistItem` always refers to a
+catalog card and never stands in for a physical `CollectionItem`.
+
+`GET /api/v1/me/wishlists` lists summaries with overall and per-set progress. `POST /api/v1/me/wishlists` creates
+one:
+
+```json
+{ "name": "Mudkip master set" }
+```
+
+`GET /api/v1/me/wishlists/{id}` returns the complete list and its goals. `PATCH /api/v1/me/wishlists/{id}` accepts
+`{"name": "Water master set"}`. `DELETE /api/v1/me/wishlists/{id}` removes the private list and returns `204`;
+catalog and collection records are unaffected.
+
+`POST /api/v1/me/wishlists/{id}/items`
+
+```json
+{
+  "catalogCardId": "9ddf1d18-42ef-4a52-93d3-ef82e40fac19",
+  "language": "en",
+  "variantId": "2ff18db6-72d1-4fcf-af48-87f84d4ab4b2",
+  "minimumCondition": "excellent",
+  "maxPrice": 800,
+  "maxCurrency": "EUR",
+  "desiredQuantity": 2,
+  "priority": "wanted",
+  "notes": "Clean copies only"
+}
+```
+
+Only `catalogCardId` is mandatory; omitted match fields mean “any”. `maxPrice` is an integer in minor units and must
+be paired with `maxCurrency` (`EUR` in the first release). A variant must belong to the selected card. Minimum
+condition includes that grade and every better grade (for example, `excellent` accepts Excellent, Near Mint, and
+Mint). Adding a goal immediately counts matching cards currently in the collection.
+
+The response preserves `desiredQuantity` and exposes `fulfilledQuantity`, `remainingQuantity`, `completed`, and
+`completedAt`. Registering new physical cards automatically advances every matching open goal, never beyond the
+desired quantity. `DELETE /api/v1/me/wishlists/{id}/items/{itemId}` removes one goal and returns the updated wishlist.
+Foreign wishlist and item UUIDs use owner-safe `404` responses.
+
 ## Closed vocabularies
 
 | Concept | Values |
@@ -246,6 +292,7 @@ strategies are stored as planner intent; automatic rearrangement is not part of 
 | Storage location type | `binder`, `box`, `top_loader_box`, `graded_card_box`, `display`, `safe`, `other` |
 | Binder page side | `front`, `back` |
 | Binder layout strategy | `set_number`, `pokedex_number`, `alphabetical`, `collectible_type`, `rarity`, `value`, `purchase_date`, `custom` |
+| Wishlist priority | `low`, `normal`, `high`, `wanted` |
 | Card set status | `announced`, `active`, `out_of_print`, `unknown` |
 
 ## Errors
@@ -282,5 +329,8 @@ Every error response follows the same shape:
 | `binder_slot_occupied` | 409 | Another physical item already occupies the target slot |
 | `binder_slot_reserved` | 409 | Physical card doesn't match the catalog-card reservation |
 | `invalid_binder_configuration` | 422 | Binder dimensions, parent, or slot configuration is invalid |
+| `wishlist_not_found` | 404 | Wishlist doesn't exist, or isn't owned by the caller |
+| `wishlist_item_not_found` | 404 | Wishlist item doesn't exist in an owned wishlist |
+| `invalid_wishlist` | 422 | Wishlist or goal violates a domain invariant |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

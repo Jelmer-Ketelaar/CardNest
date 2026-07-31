@@ -66,6 +66,7 @@ flowchart TD
     Collection[Collection: physical cards a user owns]
     Storage[Storage: hierarchy and placement history]
     Binder[Binder: visual pages and slots]
+    Wishlist[Wishlist: wanted cards and progress]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -76,6 +77,9 @@ flowchart TD
     Binder --> Storage
     Binder --> Catalog
     Binder --> Identity
+    Wishlist --> Collection
+    Wishlist --> Catalog
+    Wishlist --> Identity
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
@@ -88,10 +92,11 @@ flowchart TD
 | `Collection` | `collection_items` | `Catalog` (which card/variant), `Identity` (owner), `Shared` (`Money`) |
 | `Storage` | `storage_locations`, `collection_item_location_history` | `Collection` (physical item), `Identity` (owner) |
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
+| `Wishlist` | `wishlists`, `wishlist_items` | `Catalog` (wanted card/variant), `Collection` (matching physical items), `Identity` (owner), `Shared` (`Money`) |
 | `Shared` | cross-cutting value objects and the API exception handler | — |
 
-Planned modules (`Wishlist`, `Marketplace`, `Order`, `Payment`, `Shipping`, `Review`, `Notification`, `Pricing`,
-`Moderation`, `Reporting`) will slot in the same way, each adding one more layer of dependency on
+Planned modules (`Marketplace`, `Order`, `Payment`, `Shipping`, `Review`, `Notification`, `Pricing`, `Moderation`,
+`Reporting`) will slot in the same way, each adding one more layer of dependency on
 `Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
 
 `App\Shared\Infrastructure\Http\JsonExceptionSubscriber` is the one place that turns a thrown domain/application

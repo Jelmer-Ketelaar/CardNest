@@ -5,6 +5,7 @@ import BindersPage from '../pages/BindersPage.vue'
 import LoginPage from '../pages/LoginPage.vue'
 import RegistrationPage from '../pages/RegistrationPage.vue'
 import StoragePage from '../pages/StoragePage.vue'
+import WishlistsPage from '../pages/WishlistsPage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -16,6 +17,7 @@ export const router = createRouter({
     { path: '/collection', name: 'collection', component: CollectionPage, meta: { requiresAuth: true } },
     { path: '/storage', name: 'storage', component: StoragePage, meta: { requiresAuth: true } },
     { path: '/binders', name: 'binders', component: BindersPage, meta: { requiresAuth: true } },
+    { path: '/wishlists', name: 'wishlists', component: WishlistsPage, meta: { requiresAuth: true } },
   ],
 })
 

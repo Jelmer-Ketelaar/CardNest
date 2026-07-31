@@ -20,6 +20,7 @@ final readonly class CreateCollectionItems
     public function __construct(
         private CollectionItemReferenceResolver $references,
         private CollectionItemRepository $collectionItems,
+        private RegisteredCollectionItemsProcessor $registeredItemsProcessor,
     ) {
     }
 
@@ -47,6 +48,7 @@ final readonly class CreateCollectionItems
             );
         }
 
+        $this->registeredItemsProcessor->process($owner, $items);
         $this->collectionItems->saveMany($items);
 
         return new CreatedCollectionItemsResponse($items, $this->collectionItems->duplicateCounts($owner));

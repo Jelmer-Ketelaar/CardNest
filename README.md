@@ -90,10 +90,21 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Keep binder data private to its owner; foreign binder, slot, location, and collection-item identifiers are hidden
   behind the same owner-safe not-found behavior
 
+### Wishlists (Wishlist module)
+
+- Create, rename, browse, and remove multiple private wishlists
+- Add catalog cards with optional language, variant, minimum condition, maximum EUR price, desired quantity,
+  priority, and notes
+- Track desired, fulfilled, and remaining quantities for the whole wishlist and per card set
+- Count matching cards already in the collection when a goal is added
+- Automatically fulfill matching wishlist quantities whenever new physical collection items are registered, while
+  retaining the original target quantity and completion timestamp
+- Remove individual goals without affecting the catalog card or any physical collection item
+
 ### Frontend
 
-- Vue 3 + TypeScript single-page app: registration, login, dashboard, collection, storage, and visual binder pages
-  behind a route guard
+- Vue 3 + TypeScript single-page app: registration, login, dashboard, collection, storage, visual binder, and
+  wishlist pages behind a route guard
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
 - A typed API client with structured error handling, a Pinia store for authentication state, and small utilities
   (e.g. money formatting for minor-unit amounts)
@@ -112,7 +123,6 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Wishlist** — tracking wanted cards per set/variant/condition/price and auto-matching them against purchases
 - **Marketplace, Order & Payment** — listings, shopping cart and checkout, temporary stock reservations, a fake
   payment provider for development, and the full order lifecycle
 - **Shipping, Review, Notification, Pricing, Moderation, Reporting** — supporting modules around the above
@@ -158,6 +168,7 @@ flowchart TD
     Collection[Collection: physical cards a user owns]
     Storage[Storage: hierarchy and location history]
     Binder[Binder: visual pages, slots, placeholders]
+    Wishlist[Wishlist: wanted cards and fulfillment]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -168,14 +179,17 @@ flowchart TD
     Binder --> Storage
     Binder --> Catalog
     Binder --> Identity
+    Wishlist --> Collection
+    Wishlist --> Catalog
+    Wishlist --> Identity
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
 ```
 
-Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Shared`. Planned modules follow
-the same shape (see "What's not built yet" above). For a deeper walkthrough — including a request-sequence diagram
-and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
+Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Shared`. Planned
+modules follow the same shape (see "What's not built yet" above). For a deeper walkthrough — including a
+request-sequence diagram and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
 
 ## Tech stack
 

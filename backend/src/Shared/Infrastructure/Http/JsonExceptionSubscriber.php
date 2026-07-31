@@ -20,6 +20,12 @@ use App\Storage\Application\Exception\StorageLocationNotFound;
 use App\Storage\Domain\Exception\InvalidStorageHierarchy;
 use App\Storage\Domain\Exception\InvalidStorageTarget;
 use App\Storage\Domain\Exception\StorageOwnerMismatch;
+use App\Wishlist\Application\Exception\WishlistCardUnavailable;
+use App\Wishlist\Application\Exception\WishlistItemNotFound;
+use App\Wishlist\Application\Exception\WishlistNotFound;
+use App\Wishlist\Application\Exception\WishlistVariantUnavailable;
+use App\Wishlist\Domain\Exception\InvalidWishlist;
+use App\Wishlist\Domain\Exception\InvalidWishlistItem;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -60,6 +66,12 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof BinderSlotOccupied => [409, 'binder_slot_occupied', $exception->getMessage()],
             $exception instanceof BinderSlotReservationMismatch => [409, 'binder_slot_reserved', $exception->getMessage()],
             $exception instanceof InvalidBinderConfiguration => [422, 'invalid_binder_configuration', $exception->getMessage()],
+            $exception instanceof WishlistNotFound => [404, 'wishlist_not_found', $exception->getMessage()],
+            $exception instanceof WishlistItemNotFound => [404, 'wishlist_item_not_found', $exception->getMessage()],
+            $exception instanceof WishlistCardUnavailable => [422, 'catalog_card_unavailable', $exception->getMessage()],
+            $exception instanceof WishlistVariantUnavailable => [422, 'card_variant_unavailable', $exception->getMessage()],
+            $exception instanceof InvalidWishlist,
+            $exception instanceof InvalidWishlistItem => [422, 'invalid_wishlist', $exception->getMessage()],
             $exception instanceof HttpExceptionInterface => [$exception->getStatusCode(), 'request_failed', $exception->getMessage()],
             default => [500, 'internal_error', 'Er is een onverwachte fout opgetreden.'],
         };

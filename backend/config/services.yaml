@@ -50,5 +50,11 @@ services:
     App\Binder\Domain\Repository\BinderRepository:
         alias: App\Binder\Infrastructure\Persistence\DoctrineBinderRepository
 
+    App\Wishlist\Domain\Repository\WishlistRepository:
+        alias: App\Wishlist\Infrastructure\Persistence\DoctrineWishlistRepository
+
+    App\Collection\Application\RegisteredCollectionItemsProcessor:
+        alias: App\Wishlist\Application\MatchRegisteredCollectionItems
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

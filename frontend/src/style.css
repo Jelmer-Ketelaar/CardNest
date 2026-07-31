@@ -245,6 +245,56 @@ h1, h2, p { overflow-wrap: anywhere; }
 .placeholder-divider { display: flex; align-items: center; gap: .75rem; margin: 1.2rem 0 .2rem; color: #617066; font-size: .82rem; }
 .placeholder-divider::before, .placeholder-divider::after { content: ''; flex: 1; height: 1px; background: #d4dfd5; }
 
+.wishlist-workspace { display: grid; align-items: start; gap: 1.5rem; }
+.wishlist-sidebar { display: grid; gap: 1rem; }
+.wishlist-list { display: grid; align-content: start; gap: .55rem; }
+.wishlist-list > button {
+  display: grid;
+  gap: .3rem;
+  padding: .75rem;
+  border: 1px solid #d4dfd5;
+  border-radius: .6rem;
+  color: inherit;
+  background: #f7faf7;
+  text-align: left;
+  cursor: pointer;
+}
+.wishlist-list > button.active { border-color: #286440; box-shadow: inset 0 0 0 1px #286440; background: #ebf6ee; }
+.wishlist-list > button span { color: #617066; font-size: .8rem; }
+progress { width: 100%; height: .65rem; accent-color: #286440; }
+.wishlist-main { min-width: 0; display: grid; gap: 1.25rem; }
+.wishlist-overview { width: 100%; }
+.wishlist-title-row { display: grid; gap: 1rem; }
+.wishlist-title-row h2 { margin: 0; font-size: clamp(1.8rem, 5vw, 3rem); }
+.wishlist-title-row p:last-child { margin-bottom: 0; color: #617066; }
+.wishlist-title-row > progress { height: 1rem; }
+.wishlist-settings { display: grid; gap: .75rem; margin-top: 1rem; }
+.set-progress-list { display: grid; gap: .55rem; margin-top: 1rem; }
+.set-progress-list article { display: grid; grid-template-columns: 1fr auto; gap: .25rem .75rem; padding: .65rem; border-radius: .5rem; background: #f2f7f3; }
+.set-progress-list progress { grid-column: 1 / -1; }
+.wishlist-add-card { width: 100%; }
+.wishlist-item-form { display: grid; gap: .8rem; margin-top: 1rem; }
+.selected-card-summary { grid-column: 1 / -1; display: grid; gap: .15rem; padding: .75rem; border-left: 3px solid #286440; background: #eff7f1; }
+.selected-card-summary span { color: #617066; font-size: .82rem; }
+.wishlist-notes { grid-column: 1 / -1; }
+.wishlist-items > header { display: flex; justify-content: space-between; align-items: end; gap: 1rem; }
+.wishlist-items > header h2 { margin-top: 0; }
+.wishlist-card { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: 1rem; margin-bottom: .75rem; padding: 1rem; border: 1px solid #d4dfd5; border-radius: .75rem; background: #fff; }
+.wishlist-card--completed { border-color: #9ecbad; background: #f0f8f2; }
+.wishlist-card > img { width: 100%; border-radius: .35rem; }
+.wishlist-card__body { min-width: 0; display: grid; gap: .75rem; }
+.wishlist-card__heading { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.wishlist-card__heading h3 { margin: .25rem 0 0; }
+.wishlist-card__heading p { margin: .15rem 0 0; color: #617066; }
+.wishlist-card__heading > strong { color: #286440; white-space: nowrap; }
+.priority-badge { display: inline-block; padding: .15rem .4rem; border-radius: 999px; color: #405047; background: #e5ebe6; font-size: .7rem; font-weight: 750; }
+.priority-badge[data-priority="high"] { color: #7a4a09; background: #fff0c7; }
+.priority-badge[data-priority="wanted"] { color: #fff; background: #a6412e; }
+.wishlist-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin: 0; }
+.wishlist-card dl div { min-width: 0; }
+.wishlist-card dt { color: #617066; font-size: .7rem; text-transform: uppercase; }
+.wishlist-card dd { margin: .1rem 0 0; overflow: hidden; text-overflow: ellipsis; }
+
 @media (min-width: 44rem) {
   .site-header { grid-template-columns: auto 1fr auto; }
   .site-header nav { grid-column: auto; justify-self: center; order: initial; }
@@ -263,4 +313,8 @@ h1, h2, p { overflow-wrap: anywhere; }
   .collection-items--list .collection-card { grid-template-columns: 8rem minmax(0, 1fr); }
   .storage-layout { grid-template-columns: minmax(17rem, 22rem) minmax(0, 1fr); }
   .binder-workspace { grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr); }
+  .wishlist-workspace { grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr); }
+  .wishlist-title-row { grid-template-columns: 1fr minmax(12rem, 20rem); align-items: end; }
+  .wishlist-settings { grid-template-columns: minmax(12rem, 1fr) auto auto; align-items: end; }
+  .wishlist-item-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

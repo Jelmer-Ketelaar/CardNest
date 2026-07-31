@@ -44,6 +44,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Binder/Domain/Entity'
                 prefix: 'App\Binder\Domain\Entity'
                 alias: Binder
+            Wishlist:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Wishlist/Domain/Entity'
+                prefix: 'App\Wishlist\Domain\Entity'
+                alias: Wishlist
 
 when@test:
     doctrine:

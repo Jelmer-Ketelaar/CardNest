@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Collection\Infrastructure\Persistence;
 
+use App\Catalog\Domain\Entity\CardVariant;
+use App\Catalog\Domain\Entity\CatalogCard;
+use App\Collection\Domain\Entity\CardCondition;
+use App\Collection\Domain\Entity\CardLanguage;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Entity\CollectionItemStatus;
 use App\Collection\Domain\Repository\CollectionItemRepository;
 use App\Collection\Domain\Repository\CollectionItemSearchCriteria;
 use App\Collection\Domain\Repository\CollectionItemSearchResult;
 use App\Identity\Domain\Entity\User;
+use App\Shared\Domain\ValueObject\Money;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -109,6 +114,47 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
         }
 
         return $counts;
+    }
+
+    public function countMatching(
+        User $owner,
+        CatalogCard $card,
+        ?CardLanguage $language,
+        ?CardVariant $variant,
+        ?CardCondition $minimumCondition,
+        ?Money $maximumPrice,
+    ): int {
+        $query = $this->entityManager->createQueryBuilder()
+            ->select('COUNT(i.id)')
+            ->from(CollectionItem::class, 'i')
+            ->where('i.owner = :owner')
+            ->andWhere('i.catalogCard = :card')
+            ->andWhere('i.status = :status')
+            ->setParameter('owner', $owner)
+            ->setParameter('card', $card)
+            ->setParameter('status', CollectionItemStatus::InCollection);
+
+        if ($language instanceof CardLanguage) {
+            $query->andWhere('i.language = :language')->setParameter('language', $language);
+        }
+        if ($variant instanceof CardVariant) {
+            $query->andWhere('i.variant = :variant')->setParameter('variant', $variant);
+        }
+        if ($minimumCondition instanceof CardCondition) {
+            $query
+                ->andWhere('i.condition IN (:conditions)')
+                ->setParameter('conditions', CardCondition::valuesMeetingMinimum($minimumCondition));
+        }
+        if ($maximumPrice instanceof Money) {
+            $query
+                ->andWhere('i.purchaseAmount IS NOT NULL')
+                ->andWhere('i.purchaseCurrency = :currency')
+                ->andWhere('i.purchaseAmount <= :maximumPrice')
+                ->setParameter('currency', $maximumPrice->currency)
+                ->setParameter('maximumPrice', $maximumPrice->amount);
+        }
+
+        return (int) $query->getQuery()->getSingleScalarResult();
     }
 
     private function baseQuery(User $owner, CollectionItemSearchCriteria $criteria): QueryBuilder
