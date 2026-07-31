@@ -27,6 +27,13 @@ test('a collector can register separate physical cards', async ({ page }) => {
   let savedItems: typeof collectionItem[] = []
 
   await page.addInitScript(() => localStorage.setItem('cardnest.authToken', 'test-token'))
+  await page.route(/\/api\/v1\/me\/storage-locations$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [], total: 0 }),
+    })
+  })
   await page.route(/\/api\/v1\/me\/collection-items(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'POST') {
       savedItems = [collectionItem, { ...collectionItem, id: crypto.randomUUID() }]

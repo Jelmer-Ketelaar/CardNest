@@ -7,6 +7,11 @@ import ErrorMessage from '../components/ErrorMessage.vue'
 import type { PaginatedResponse } from '../types/api'
 import type { CatalogCard, CatalogCardVariant } from '../types/catalog'
 import type { CollectionItem, CreatedCollectionItemsResponse } from '../types/collection'
+import type {
+  CollectionItemLocationResponse,
+  StorageLocation,
+  StorageLocationCollectionResponse,
+} from '../types/storage'
 import { formatMoney, parseOptionalMinorUnits } from '../utils/money'
 
 const languages = [
@@ -47,6 +52,7 @@ const error = ref('')
 const success = ref('')
 const viewMode = ref<'grid' | 'list'>('grid')
 const archivingId = ref<string | null>(null)
+const storageLocations = ref<StorageLocation[]>([])
 const filters = reactive({ cardName: '', language: '', variant: '', condition: '', status: 'in_collection' })
 
 const catalogQuery = ref('')
@@ -68,6 +74,7 @@ const createForm = reactive({
 
 const editingItem = ref<CollectionItem | null>(null)
 const editVariants = ref<CatalogCardVariant[]>([])
+const originalLocationId = ref('')
 const editSaving = ref(false)
 const editForm = reactive({
   variantId: '',
@@ -77,6 +84,7 @@ const editForm = reactive({
   purchasedAt: '',
   sellerName: '',
   notes: '',
+  locationId: '',
 })
 
 function readableCode(value: string): string {
@@ -104,6 +112,15 @@ async function loadItems(): Promise<void> {
     error.value = caughtMessage(caught, 'Je collectie kon niet worden geladen.')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadStorageLocations(): Promise<void> {
+  try {
+    const response = await apiRequest<StorageLocationCollectionResponse>('/me/storage-locations')
+    storageLocations.value = response.items
+  } catch (caught) {
+    error.value = caughtMessage(caught, 'De opslaglocaties konden niet worden geladen.')
   }
 }
 
@@ -208,7 +225,10 @@ async function createItems(): Promise<void> {
 async function startEdit(item: CollectionItem): Promise<void> {
   error.value = ''
   try {
-    const card = await apiRequest<CatalogCard>(`/cards/${item.card.id}`)
+    const [card, location] = await Promise.all([
+      apiRequest<CatalogCard>(`/cards/${item.card.id}`),
+      apiRequest<CollectionItemLocationResponse>(`/me/collection-items/${item.id}/location`),
+    ])
     editingItem.value = item
     editVariants.value = card.variants
     editForm.variantId = item.variant.id
@@ -218,6 +238,8 @@ async function startEdit(item: CollectionItem): Promise<void> {
     editForm.purchasedAt = item.purchase.purchasedAt ?? ''
     editForm.sellerName = item.purchase.sellerName ?? ''
     editForm.notes = item.notes ?? ''
+    editForm.locationId = location.current?.location.id ?? ''
+    originalLocationId.value = editForm.locationId
   } catch (caught) {
     error.value = caughtMessage(caught, 'De kaart kon niet worden geopend voor bewerking.')
   }
@@ -267,6 +289,16 @@ async function saveEdit(): Promise<void> {
       method: 'PATCH',
       body: JSON.stringify(payload),
     })
+    if (editForm.locationId !== originalLocationId.value) {
+      if (editForm.locationId === '') {
+        await apiRequest<void>(`/me/collection-items/${item.id}/location`, { method: 'DELETE' })
+      } else {
+        await apiRequest<CollectionItemLocationResponse>(`/me/collection-items/${item.id}/location`, {
+          method: 'POST',
+          body: JSON.stringify({ locationId: editForm.locationId }),
+        })
+      }
+    }
     success.value = 'De collectiekaart is bijgewerkt.'
     closeEdit()
     await loadItems()
@@ -294,7 +326,10 @@ async function archiveItem(item: CollectionItem): Promise<void> {
   }
 }
 
-onMounted(() => { void loadItems() })
+onMounted(() => {
+  void loadItems()
+  void loadStorageLocations()
+})
 </script>
 
 <template>
@@ -479,6 +514,18 @@ onMounted(() => { void loadItems() })
           <BaseInput id="edit-purchase-price" v-model="editForm.purchasePrice" label="Aankoopprijs (centen)" type="number" min="0" />
           <BaseInput id="edit-purchased-at" v-model="editForm.purchasedAt" label="Aankoopdatum" type="date" />
           <BaseInput id="edit-seller-name" v-model="editForm.sellerName" label="Verkoper of winkel" />
+          <label class="field">
+            <span>Fysieke opslaglocatie</span>
+            <select v-model="editForm.locationId">
+              <option value="">Niet geplaatst</option>
+              <option v-for="location in storageLocations" :key="location.id" :value="location.id">
+                {{ location.path.map((entry) => entry.name).join(' › ') }}
+              </option>
+            </select>
+            <RouterLink v-if="storageLocations.length === 0" :to="{ name: 'storage' }">
+              Maak eerst een opslaglocatie
+            </RouterLink>
+          </label>
           <label class="field">
             <span>Notities</span>
             <textarea v-model="editForm.notes" rows="4" maxlength="5000" />

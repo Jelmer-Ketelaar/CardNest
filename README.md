@@ -67,12 +67,21 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Strict ownership checks: your collection is only ever visible to you, and a wrong or foreign id behaves exactly
   like it doesn't exist
 - On the frontend, a full "My collection" page ties this together: search the catalog, add a card with all its
-  details, filter/paginate in a grid or list view, edit an item in a modal, and archive it
+  details, filter/paginate in a grid or list view, edit an item and its physical location in a modal, and archive it
+
+### Physical storage (Storage module)
+
+- Create and reorganize owner-scoped hierarchical locations such as a room, cabinet, box, display, or safe
+- Assign a physical collection item to exactly one current location, then move or unplace it later
+- Keep every previous placement in an immutable location history with placed/removed timestamps
+- Enforce the single-current-location rule with a partial unique PostgreSQL index and pessimistic locking
+- Automatically close a current placement when its collection item is archived
+- Build and edit the hierarchy in a dedicated authenticated storage page
 
 ### Frontend
 
-- Vue 3 + TypeScript single-page app: registration, login, a dashboard, and the collection page above, behind a
-  route guard
+- Vue 3 + TypeScript single-page app: registration, login, dashboard, collection, and storage pages behind a route
+  guard
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
 - A typed API client with structured error handling, a Pinia store for authentication state, and small utilities
   (e.g. money formatting for minor-unit amounts)
@@ -91,8 +100,8 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Storage & Binder** — hierarchical storage locations, visual binder pages/slots, drag-and-drop placement, and
-  placeholders for missing cards in an incomplete set
+- **Binder** — visual binder pages/slots, drag-and-drop placement, and placeholders for missing cards in an
+  incomplete set
 - **Wishlist** — tracking wanted cards per set/variant/condition/price and auto-matching them against purchases
 - **Marketplace, Order & Payment** — listings, shopping cart and checkout, temporary stock reservations, a fake
   payment provider for development, and the full order lifecycle
@@ -137,18 +146,21 @@ flowchart TD
     Identity[Identity: users, bearer tokens]
     Catalog[Catalog: series, sets, cards, variants]
     Collection[Collection: physical cards a user owns]
+    Storage[Storage: hierarchy and location history]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
     Collection --> Identity
+    Storage --> Collection
+    Storage --> Identity
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
 ```
 
-Implemented modules today: `Identity`, `Catalog`, `Collection`, `Shared`. Planned modules follow the same shape (see
-"What's not built yet" above). For a deeper walkthrough — including a request-sequence diagram and the conventions
-every module follows — see [docs/architecture.md](docs/architecture.md).
+Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Shared`. Planned modules follow the same
+shape (see "What's not built yet" above). For a deeper walkthrough — including a request-sequence diagram and the
+conventions every module follows — see [docs/architecture.md](docs/architecture.md).
 
 ## Tech stack
 

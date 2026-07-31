@@ -22,6 +22,7 @@ async function logout(): Promise<void> {
       <nav aria-label="Hoofdnavigatie">
         <RouterLink :to="{ name: 'dashboard' }">Dashboard</RouterLink>
         <RouterLink :to="{ name: 'collection' }">Collectie</RouterLink>
+        <RouterLink :to="{ name: 'storage' }">Opslag</RouterLink>
       </nav>
       <BaseButton variant="secondary" @click="logout">Uitloggen</BaseButton>
     </header>

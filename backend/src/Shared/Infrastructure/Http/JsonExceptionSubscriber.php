@@ -11,6 +11,9 @@ use App\Collection\Domain\Exception\ArchivedCollectionItemCannotBeChanged;
 use App\Collection\Domain\Exception\CardVariantDoesNotBelongToCard;
 use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\InvalidCredentials;
+use App\Storage\Application\Exception\StorageLocationNotFound;
+use App\Storage\Domain\Exception\InvalidStorageHierarchy;
+use App\Storage\Domain\Exception\StorageOwnerMismatch;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -42,6 +45,9 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof CardVariantUnavailable,
             $exception instanceof CardVariantDoesNotBelongToCard => [422, 'card_variant_unavailable', $exception->getMessage()],
             $exception instanceof ArchivedCollectionItemCannotBeChanged => [409, 'collection_item_archived', $exception->getMessage()],
+            $exception instanceof StorageLocationNotFound => [404, 'storage_location_not_found', $exception->getMessage()],
+            $exception instanceof InvalidStorageHierarchy,
+            $exception instanceof StorageOwnerMismatch => [422, 'invalid_storage_hierarchy', $exception->getMessage()],
             $exception instanceof HttpExceptionInterface => [$exception->getStatusCode(), 'request_failed', $exception->getMessage()],
             default => [500, 'internal_error', 'Er is een onverwachte fout opgetreden.'],
         };

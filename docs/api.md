@@ -140,6 +140,41 @@ returns `204`.
 `duplicate.ownedQuantity` counts the caller's own **in-collection** items that share the same card, language and
 variant; `isDuplicate` is simply `ownedQuantity > 1`.
 
+## Physical storage
+
+Protected (`ROLE_USER`) and owner-scoped. Storage locations form an adjacency-list hierarchy: `parentId` is nullable,
+while `path` returns the complete root-to-location trail needed to answer “where is my card?”.
+
+`GET /api/v1/me/storage-locations` lists the caller's locations with their path and current item count.
+
+`POST /api/v1/me/storage-locations`
+
+```json
+{
+  "name": "Binderkast",
+  "type": "other",
+  "parentId": "fd542305-16c4-46a8-a36d-d776b7e0437c"
+}
+```
+
+`parentId` is optional and must identify another location owned by the caller. `GET
+/api/v1/me/storage-locations/{id}` returns one location. `PATCH /api/v1/me/storage-locations/{id}` changes `name`,
+`type`, or its parent; use `clearParent: true` to move it to the root. Cycles and cross-owner parents return `422`.
+
+`POST /api/v1/me/collection-items/{itemId}/location` places or moves one physical card atomically:
+
+```json
+{ "locationId": "12403b06-a415-4f58-a45a-57c8ef748b16" }
+```
+
+The previous current placement is closed before the new placement is inserted, inside one database transaction.
+`DELETE /api/v1/me/collection-items/{itemId}/location` unplaces the item and returns `204`.
+
+`GET /api/v1/me/collection-items/{itemId}/location` returns the current placement. `GET
+/api/v1/me/collection-items/{itemId}/location-history` additionally returns all past placements, newest first.
+Archived collection items cannot be moved. Archiving an item automatically closes its current placement but keeps
+the history. Unknown and other users' item/location UUIDs all use the same owner-safe `404` behavior.
+
 ## Closed vocabularies
 
 | Concept | Values |
@@ -148,6 +183,7 @@ variant; `isDuplicate` is simply `ownedQuantity > 1`.
 | Card condition | `mint`, `near_mint`, `excellent`, `good`, `light_played`, `played`, `poor` |
 | Card variant | `normal`, `holo`, `reverse_holo`, `cosmos_holo`, `stamped`, `promo`, `first_edition`, `unlimited`, `shadowless`, `alternate_art`, `illustration_rare`, `special_illustration_rare`, `gold`, `rainbow`, `master_ball`, `poke_ball`, `other` |
 | Collection item status | `in_collection`, `archived` |
+| Storage location type | `binder`, `box`, `top_loader_box`, `graded_card_box`, `display`, `safe`, `other` |
 | Card set status | `announced`, `active`, `out_of_print`, `unknown` |
 
 ## Errors
@@ -178,5 +214,7 @@ Every error response follows the same shape:
 | `catalog_card_unavailable` | 422 | Referenced `catalogCardId` doesn't exist |
 | `card_variant_unavailable` | 422 | Referenced `variantId` doesn't exist or doesn't belong to the card |
 | `collection_item_archived` | 409 | Attempted to change an archived collection item |
+| `storage_location_not_found` | 404 | Location doesn't exist, or isn't owned by the caller |
+| `invalid_storage_hierarchy` | 422 | Parent creates a cycle or belongs to another user |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

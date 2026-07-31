@@ -41,5 +41,11 @@ services:
     App\Collection\Domain\Repository\CollectionItemRepository:
         alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionItemRepository
 
+    App\Storage\Domain\Repository\StorageLocationRepository:
+        alias: App\Storage\Infrastructure\Persistence\DoctrineStorageLocationRepository
+
+    App\Storage\Domain\Repository\CollectionItemLocationRepository:
+        alias: App\Storage\Infrastructure\Persistence\DoctrineCollectionItemLocationRepository
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
