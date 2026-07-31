@@ -20,6 +20,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Identity/Domain/Entity'
                 prefix: 'App\Identity\Domain\Entity'
                 alias: Identity
+            Catalog:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Catalog/Domain/Entity'
+                prefix: 'App\Catalog\Domain\Entity'
+                alias: Catalog
 
 when@test:
     doctrine:

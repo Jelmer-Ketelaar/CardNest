@@ -32,5 +32,11 @@ services:
         arguments:
             $limiter: '@limiter.login'
 
+    App\Catalog\Domain\Repository\CardSetRepository:
+        alias: App\Catalog\Infrastructure\Persistence\DoctrineCardSetRepository
+
+    App\Catalog\Domain\Repository\CatalogCardRepository:
+        alias: App\Catalog\Infrastructure\Persistence\DoctrineCatalogCardRepository
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
