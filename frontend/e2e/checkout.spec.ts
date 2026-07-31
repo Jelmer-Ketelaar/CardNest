@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-function actionableOrder(status: 'paid' | 'shipped') {
+function actionableOrder(status: 'paid' | 'shipped' | 'completed') {
   const now = new Date().toISOString()
   const buyerId = crypto.randomUUID()
   const sellerId = crypto.randomUUID()
@@ -8,8 +8,11 @@ function actionableOrder(status: 'paid' | 'shipped') {
     { id: crypto.randomUUID(), from: null, to: 'pending_payment', actor: { id: buyerId }, occurredAt: now },
     { id: crypto.randomUUID(), from: 'pending_payment', to: 'paid', actor: { id: buyerId }, occurredAt: now },
   ]
-  if (status === 'shipped') {
+  if (status === 'shipped' || status === 'completed') {
     history.push({ id: crypto.randomUUID(), from: 'paid', to: 'shipped', actor: { id: sellerId }, occurredAt: now })
+  }
+  if (status === 'completed') {
+    history.push({ id: crypto.randomUUID(), from: 'shipped', to: 'completed', actor: { id: buyerId }, occurredAt: now })
   }
 
   return {
@@ -30,6 +33,12 @@ function actionableOrder(status: 'paid' | 'shipped') {
       variant: 'holo',
       condition: 'near_mint',
       price: { amount: 750, currency: 'EUR' },
+      collectionImport: {
+        available: status === 'completed',
+        imported: false,
+        collectionItemId: null,
+        importedAt: null,
+      },
     }],
     shippingMethod: 'letter_mail',
     costs: {
@@ -53,7 +62,7 @@ function actionableOrder(status: 'paid' | 'shipped') {
       confirmReceived: status === 'shipped',
     },
     paidAt: now,
-    completedAt: null,
+    completedAt: status === 'completed' ? now : null,
     createdAt: now,
     updatedAt: now,
   }
@@ -134,6 +143,7 @@ test('a collector can add a listing and complete a split-ready test checkout', a
       variant: listing.variant,
       condition: listing.condition,
       price: listing.price,
+      collectionImport: { available: false, imported: false, collectionItemId: null, importedAt: null },
     }],
     shippingMethod: 'letter_mail',
     costs: {
@@ -283,4 +293,70 @@ test('a buyer can confirm a shipped order as received', async ({ page }) => {
   await expect(page.getByText('Ontvangst bevestigd. De order is voltooid.')).toBeVisible()
   await expect(page.getByText('Voltooid', { exact: true }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Bevestig ontvangst' })).toHaveCount(0)
+})
+
+test('a buyer confirms condition and storage before importing a purchase', async ({ page }) => {
+  const order = actionableOrder('completed')
+  const locationId = crypto.randomUUID()
+  const collectionItemId = crypto.randomUUID()
+  const importedOrder = {
+    ...order,
+    items: order.items.map((item) => ({
+      ...item,
+      collectionImport: {
+        available: false,
+        imported: true,
+        collectionItemId,
+        importedAt: new Date().toISOString(),
+      },
+    })),
+  }
+  let importPayload: Record<string, unknown> | null = null
+
+  await page.addInitScript(() => localStorage.setItem('cardnest.authToken', 'buyer-token'))
+  await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
+  })
+  await page.route(/\/api\/v1\/me\/storage-locations$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [{
+          id: locationId,
+          name: 'Nieuwe aanwinsten',
+          type: 'box',
+          parentId: null,
+          path: [{ id: locationId, name: 'Nieuwe aanwinsten', type: 'box' }],
+          currentItemCount: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }],
+        total: 1,
+      }),
+    })
+  })
+  await page.route(new RegExp(`/api/v1/me/orders/${order.id}/items/${order.items[0].id}/import-to-collection$`), async (route) => {
+    importPayload = route.request().postDataJSON() as Record<string, unknown>
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(importedOrder) })
+  })
+
+  await page.goto('/orders')
+  await page.getByRole('button', { name: 'Voeg toe aan collectie' }).click()
+  await expect(page.getByRole('dialog', { name: 'Mudkip toevoegen' })).toBeVisible()
+  await page.getByLabel('Taal').selectOption('fr')
+  await page.getByLabel('Conditie na ontvangst').selectOption('excellent')
+  await page.getByLabel('Fysieke opslaglocatie').selectOption(locationId)
+  await page.getByLabel('Notities').fill('Gecontroleerd na ontvangst.')
+  await page.getByRole('button', { name: 'Bevestig en voeg toe' }).click()
+
+  await expect(page.getByText('Mudkip is aan je collectie toegevoegd.')).toBeVisible()
+  await expect(page.getByText('Aan collectie toegevoegd')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Voeg toe aan collectie' })).toHaveCount(0)
+  expect(importPayload).toEqual({
+    language: 'fr',
+    condition: 'excellent',
+    storageLocationId: locationId,
+    notes: 'Gecontroleerd na ontvangst.',
+  })
 })

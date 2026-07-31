@@ -85,6 +85,8 @@ final readonly class DoctrineOrderRepository implements OrderRepository
                 'card',
                 'cardSet',
                 'variant',
+                'importedItem',
+                'importedOwner',
                 'history',
                 'historyActor',
             )
@@ -100,6 +102,8 @@ final readonly class DoctrineOrderRepository implements OrderRepository
             ->join('ownedItem.catalogCard', 'card')
             ->join('card.set', 'cardSet')
             ->join('ownedItem.variant', 'variant')
+            ->leftJoin('item.importedCollectionItem', 'importedItem')
+            ->leftJoin('importedItem.owner', 'importedOwner')
             ->leftJoin('purchase.statusHistory', 'history')
             ->leftJoin('history.actor', 'historyActor');
     }

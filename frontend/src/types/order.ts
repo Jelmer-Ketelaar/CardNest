@@ -52,6 +52,12 @@ export interface OrderItem {
   variant: string
   condition: string
   price: Money
+  collectionImport: {
+    available: boolean
+    imported: boolean
+    collectionItemId: string | null
+    importedAt: string | null
+  }
 }
 
 export interface Order {

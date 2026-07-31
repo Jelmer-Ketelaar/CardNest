@@ -391,6 +391,9 @@ progress { width: 100%; height: .65rem; accent-color: #286440; }
 .order-items li > div { min-width: 0; display: grid; gap: .15rem; }
 .order-items span, .order-items small { color: #617066; }
 .order-items li > strong { white-space: nowrap; }
+.order-item__import { margin-top: .45rem; }
+.order-item__import .button { justify-self: start; padding: .45rem .65rem; }
+.order-import-panel { width: min(34rem, 100%); }
 .order-card__details { display: grid; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #d4dfd5; }
 .order-card__details h3 { margin: 0 0 .4rem; }
 .order-card__details p { margin: 0; }

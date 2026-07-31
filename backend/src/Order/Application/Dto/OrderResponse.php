@@ -81,6 +81,10 @@ final readonly class OrderResponse
         $listing = $item->getListing();
         $ownedItem = $listing->getCollectionItem();
         $card = $ownedItem->getCatalogCard();
+        $importedItem = $item->getImportedCollectionItem();
+        $participantOwnsImportedItem = $this->participant instanceof User
+            && $importedItem !== null
+            && $importedItem->getOwner()->getId()->equals($this->participant->getId());
 
         return [
             'id' => $item->getId()->toRfc4122(),
@@ -98,6 +102,14 @@ final readonly class OrderResponse
             'variant' => $ownedItem->getVariant()->getCode()->value,
             'condition' => $ownedItem->getCondition()->value,
             'price' => $item->getPrice()->toArray(),
+            'collectionImport' => [
+                'available' => $this->participant instanceof User && $item->canBeImportedBy($this->participant),
+                'imported' => $importedItem !== null,
+                'collectionItemId' => $participantOwnsImportedItem
+                    ? $importedItem->getId()->toRfc4122()
+                    : null,
+                'importedAt' => $item->getImportedAt()?->format(DATE_ATOM),
+            ],
         ];
     }
 

@@ -42,7 +42,9 @@ the server-calculated compatible shipping methods and complete totals, then subm
 one shipping choice per seller. `/orders` shows both purchases and sales returned by the participant-scoped API.
 It renders the server-owned status timeline and only shows `Markeer als verzonden` to the seller of a paid order or
 `Bevestig ontvangst` to the buyer of a shipped order, based on the response DTO's `availableActions`. The fake
-checkout is labelled explicitly: the frontend never collects payment credentials.
+checkout is labelled explicitly: the frontend never collects payment credentials. After completion, the buyer can
+open an item-level import dialog to confirm language and condition, optionally select an owned storage location,
+and add the purchase once without re-entering catalog, variant, or price data.
 
 ## Adding a page or feature
 

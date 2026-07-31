@@ -33,6 +33,7 @@ final class CheckoutApiTest extends WebTestCase
 {
     private KernelBrowser $client;
     private EntityManagerInterface $entityManager;
+    private User $buyer;
     private User $sellerA;
     private User $sellerB;
     private string $buyerToken;
@@ -47,7 +48,7 @@ final class CheckoutApiTest extends WebTestCase
     {
         $this->client = self::createClient();
         $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
-        [, $this->buyerToken] = $this->createAuthenticatedUser('buyer');
+        [$this->buyer, $this->buyerToken] = $this->createAuthenticatedUser('buyer');
         [, $this->secondBuyerToken] = $this->createAuthenticatedUser('second-buyer');
         [$this->sellerA, $this->sellerAToken] = $this->createAuthenticatedUser('seller-a');
         [$this->sellerB] = $this->createAuthenticatedUser('seller-b');
@@ -313,6 +314,7 @@ final class CheckoutApiTest extends WebTestCase
             array_column($completedOrder['statusHistory'] ?? [], 'to'),
         );
         self::assertFalse($completedOrder['availableActions']['confirmReceived'] ?? true);
+        self::assertTrue($completedOrder['items'][0]['collectionImport']['available'] ?? false);
         self::assertSame(1, (int) $connection->fetchOne("SELECT COUNT(*) FROM shipments WHERE status = 'delivered'"));
         self::assertSame('archived', $connection->fetchOne(
             'SELECT status FROM collection_items WHERE id = :id',
@@ -329,6 +331,154 @@ final class CheckoutApiTest extends WebTestCase
         // Assert
         self::assertResponseStatusCodeSame(409);
         self::assertSame('invalid_order_transition', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testBuyerImportsCompletedOrderItemIntoCollectionOnce(): void
+    {
+        // Arrange
+        $buyerLocation = new StorageLocation($this->buyer, 'Nieuwe aanwinsten', StorageLocationType::Box);
+        $foreignLocation = new StorageLocation($this->sellerA, 'Privé opslag', StorageLocationType::Safe);
+        $this->entityManager->persist($buyerLocation);
+        $this->entityManager->persist($foreignLocation);
+        $this->entityManager->flush();
+        $this->jsonRequest('POST', '/api/v1/me/wishlists', ['name' => 'Ontvangen kaarten'], $this->buyerToken);
+        self::assertResponseStatusCodeSame(201);
+        $wishlistId = $this->responseData()['id'] ?? null;
+        self::assertIsString($wishlistId);
+        $this->jsonRequest('POST', '/api/v1/me/wishlists/'.$wishlistId.'/items', [
+            'catalogCardId' => $this->sellerAFirst->getCollectionItem()->getCatalogCard()->getId()->toRfc4122(),
+            'variantId' => $this->sellerAFirst->getCollectionItem()->getVariant()->getId()->toRfc4122(),
+            'language' => 'fr',
+            'minimumCondition' => 'excellent',
+            'maxPrice' => 800,
+            'maxCurrency' => 'EUR',
+            'desiredQuantity' => 1,
+        ], $this->buyerToken);
+        self::assertResponseStatusCodeSame(201);
+        [$orderId, $orderItemId] = $this->checkoutAndComplete($this->sellerAFirst);
+        $payload = [
+            'language' => 'fr',
+            'condition' => 'excellent',
+            'storageLocationId' => $buyerLocation->getId()->toRfc4122(),
+            'notes' => 'Conditie na ontvangst gecontroleerd.',
+        ];
+
+        // Act
+        $this->jsonRequest(
+            'POST',
+            '/api/v1/me/orders/'.$orderId.'/items/'.$orderItemId.'/import-to-collection',
+            $payload,
+            $this->sellerAToken,
+        );
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('order_not_found', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->jsonRequest(
+            'POST',
+            '/api/v1/me/orders/'.$orderId.'/items/'.$orderItemId.'/import-to-collection',
+            ['language' => 'fr', 'condition' => 'unopened'],
+            $this->buyerToken,
+        );
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $foreignPayload = $payload;
+        $foreignPayload['storageLocationId'] = $foreignLocation->getId()->toRfc4122();
+        $this->jsonRequest(
+            'POST',
+            '/api/v1/me/orders/'.$orderId.'/items/'.$orderItemId.'/import-to-collection',
+            $foreignPayload,
+            $this->buyerToken,
+        );
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('storage_location_not_found', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->jsonRequest(
+            'POST',
+            '/api/v1/me/orders/'.$orderId.'/items/'.$orderItemId.'/import-to-collection',
+            $payload,
+            $this->buyerToken,
+        );
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $order = $this->responseData();
+        $import = $order['items'][0]['collectionImport'] ?? null;
+        self::assertIsArray($import);
+        self::assertFalse($import['available'] ?? true);
+        self::assertTrue($import['imported'] ?? false);
+        self::assertIsString($import['collectionItemId'] ?? null);
+        self::assertNotNull($import['importedAt'] ?? null);
+        $collectionItemId = $import['collectionItemId'];
+        $connection = self::getContainer()->get(EntityManagerInterface::class)->getConnection();
+        $row = $connection->fetchAssociative(
+            'SELECT owner_id::text, catalog_card_id::text, variant_id::text, language, condition, purchase_price, purchase_currency, purchased_at, notes FROM collection_items WHERE id = :id',
+            ['id' => $collectionItemId],
+        );
+        self::assertIsArray($row);
+        self::assertSame($this->buyer->getId()->toRfc4122(), $row['owner_id']);
+        self::assertSame($this->sellerAFirst->getCollectionItem()->getCatalogCard()->getId()->toRfc4122(), $row['catalog_card_id']);
+        self::assertSame($this->sellerAFirst->getCollectionItem()->getVariant()->getId()->toRfc4122(), $row['variant_id']);
+        self::assertSame('fr', $row['language']);
+        self::assertSame('excellent', $row['condition']);
+        self::assertSame(750, (int) $row['purchase_price']);
+        self::assertSame('EUR', $row['purchase_currency']);
+        self::assertNotNull($row['purchased_at']);
+        self::assertSame('Conditie na ontvangst gecontroleerd.', $row['notes']);
+        $sourceRow = $connection->fetchAssociative(
+            'SELECT owner_id::text, status FROM collection_items WHERE id = :id',
+            ['id' => $this->sellerAFirst->getCollectionItem()->getId()->toRfc4122()],
+        );
+        self::assertIsArray($sourceRow);
+        self::assertSame($this->sellerA->getId()->toRfc4122(), $sourceRow['owner_id']);
+        self::assertSame('archived', $sourceRow['status']);
+        self::assertSame(1, (int) $connection->fetchOne(
+            'SELECT COUNT(*) FROM collection_item_location_history WHERE collection_item_id = :item AND storage_location_id = :location AND removed_at IS NULL',
+            ['item' => $collectionItemId, 'location' => $buyerLocation->getId()->toRfc4122()],
+        ));
+        self::assertSame($collectionItemId, $connection->fetchOne(
+            'SELECT imported_collection_item_id::text FROM order_items WHERE id = :id',
+            ['id' => $orderItemId],
+        ));
+        $this->authorizedRequest('GET', '/api/v1/me/wishlists/'.$wishlistId, $this->buyerToken);
+        self::assertResponseIsSuccessful();
+        self::assertSame(1, $this->responseData()['items'][0]['fulfilledQuantity'] ?? null);
+        self::assertTrue($this->responseData()['items'][0]['completed'] ?? false);
+
+        // Act
+        $this->authorizedRequest('GET', '/api/v1/me/orders/'.$orderId, $this->sellerAToken);
+
+        // Assert
+        self::assertTrue($this->responseData()['items'][0]['collectionImport']['imported'] ?? false);
+        self::assertNull($this->responseData()['items'][0]['collectionImport']['collectionItemId'] ?? null);
+
+        // Act
+        $this->authorizedRequest('GET', '/api/v1/me/collection-items/'.$collectionItemId, $this->sellerAToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('collection_item_not_found', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->jsonRequest(
+            'POST',
+            '/api/v1/me/orders/'.$orderId.'/items/'.$orderItemId.'/import-to-collection',
+            $payload,
+            $this->buyerToken,
+        );
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('invalid_collection_import', $this->responseData()['error']['code'] ?? null);
     }
 
     public function testCheckoutValidatesCartShippingAndAddress(): void
@@ -453,6 +603,28 @@ final class CheckoutApiTest extends WebTestCase
         $this->jsonRequest('POST', '/api/v1/me/cart/checkout', $this->checkoutPayload($shippingMethods), $token);
     }
 
+    /** @return array{string, string} */
+    private function checkoutAndComplete(Listing $listing): array
+    {
+        $this->addToCart($this->buyerToken, $listing);
+        $this->checkout($this->buyerToken, [
+            $listing->getSeller()->getId()->toRfc4122() => 'letter_mail',
+        ]);
+        self::assertResponseIsSuccessful();
+        $checkout = $this->responseData();
+        $orderId = $checkout['orders'][0]['id'] ?? null;
+        $orderItemId = $checkout['orders'][0]['items'][0]['id'] ?? null;
+        self::assertIsString($orderId);
+        self::assertIsString($orderItemId);
+
+        $this->authorizedRequest('POST', '/api/v1/me/orders/'.$orderId.'/mark-shipped', $this->sellerAToken);
+        self::assertResponseIsSuccessful();
+        $this->authorizedRequest('POST', '/api/v1/me/orders/'.$orderId.'/confirm-received', $this->buyerToken);
+        self::assertResponseIsSuccessful();
+
+        return [$orderId, $orderItemId];
+    }
+
     /**
      * @param array<string, string> $shippingMethods
      *
@@ -471,7 +643,7 @@ final class CheckoutApiTest extends WebTestCase
         ];
     }
 
-    /** @param array<string, array<string, string>|string|null> $payload */
+    /** @param array<string, mixed> $payload */
     private function jsonRequest(string $method, string $uri, array $payload, string $token): void
     {
         $this->client->request(

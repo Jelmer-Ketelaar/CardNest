@@ -137,6 +137,8 @@ CardNest is implemented incrementally, one module at a time. This is the current
   delivered timestamps
 - On confirmed receipt, archive the seller's sold physical collection items and close their current storage or
   binder placements atomically while retaining the full location and sale history
+- Offer each completed order item to the buyer exactly once: card, variant and paid item price are reused from the
+  order, while the buyer confirms language, received condition, notes and an optional owner-checked storage location
 
 ### Frontend
 
@@ -160,8 +162,7 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Buyer collection import, cancellations and refunds** — confirm the received card's condition and destination
-  before creating the buyer-owned physical object; add reversible post-payment failure paths separately
+- **Cancellations and refunds** — add reversible post-payment failure paths separately from successful fulfillment
 - **Review, Notification, Pricing, Moderation, Reporting** — supporting modules around the marketplace
   (buyer/seller reviews, alerts, price history, fraud signals, financial reporting, ...)
 
@@ -229,6 +230,8 @@ flowchart TD
     Order --> Marketplace
     Order --> Identity
     Order --> Payment
+    Order --> Collection
+    Order --> Storage
     Order --> Shared
     Shipping --> Order
     Shipping --> Collection

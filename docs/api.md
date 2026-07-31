@@ -553,9 +553,41 @@ same transaction it marks the shipment delivered, archives every sold physical i
 and closes any current storage or binder placement while preserving its location history. A seller or unrelated
 user receives owner-safe `404 order_not_found`; an invalid repeat returns `409 invalid_order_transition`.
 
-Confirmation does not create a buyer-owned `CollectionItem`: checking the received condition and choosing a new
-storage location are intentionally a separate import flow. Refunds, cancellations and reviews also remain outside
-this increment.
+Every order item contains a caller-aware import state:
+
+```json
+{
+  "collectionImport": {
+    "available": true,
+    "imported": false,
+    "collectionItemId": null,
+    "importedAt": null
+  }
+}
+```
+
+`POST /api/v1/me/orders/{id}/items/{itemId}/import-to-collection` is buyer-only and available exactly once after
+the order is `completed`:
+
+```json
+{
+  "language": "en",
+  "condition": "near_mint",
+  "storageLocationId": "d55f328a-d498-48d7-b422-08f635f13963",
+  "notes": "Condition checked after receipt."
+}
+```
+
+`language` and `condition` are required confirmations. `storageLocationId` and `notes` are optional; a supplied
+location must belong to the buyer. The service copies catalog card, configured variant, item price, currency, and
+payment date from the immutable order data, creates one separate buyer-owned physical `CollectionItem`, updates
+matching wishlist progress, optionally places it in storage, and links it back to the order item in one transaction.
+The seller's source record remains archived for sale and purchase history. The updated order DTO is returned with
+`imported: true`, `importedAt`, and `collectionItemId` only when that new item is currently owned by the caller.
+
+A seller or unrelated user receives owner-safe `404 order_not_found`; a foreign storage location returns
+`404 storage_location_not_found`; a pre-completion or repeated import returns `409 invalid_collection_import`.
+Refunds, cancellations and reviews remain outside this increment.
 
 ## Closed vocabularies
 
@@ -627,8 +659,10 @@ Every error response follows the same shape:
 | `invalid_cart` | 409 | Duplicate listing or cart-size invariant was violated |
 | `invalid_shipping_selection` | 422 | Missing, extra, unsupported, or incompatible seller delivery choice |
 | `order_not_found` | 404 | Order doesn't exist or caller is neither its buyer nor seller |
+| `order_item_not_found` | 404 | Item doesn't exist in the buyer's referenced order |
 | `invalid_order` | 422 | Address, totals, currency, seller grouping, or payment data violates an invariant |
 | `invalid_order_transition` | 409 | Order or shipment is not in the required state for the requested participant action |
+| `invalid_collection_import` | 409 | Order item is not completed, was already imported, or cannot preserve its card/variant identity |
 | `payment_failed` | 402 | Payment provider rejected checkout; transaction was rolled back |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

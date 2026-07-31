@@ -93,6 +93,8 @@ flowchart TD
     Order --> Marketplace
     Order --> Identity
     Order --> Payment
+    Order --> Collection
+    Order --> Storage
     Order --> Shared
     Shipping --> Order
     Shipping --> Collection
@@ -115,7 +117,7 @@ flowchart TD
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
 | `Wishlist` | `wishlists`, `wishlist_items` | `Catalog` (wanted card/variant), `Collection` (matching physical items), `Identity` (owner), `Shared` (`Money`) |
 | `Marketplace` | `listings`, `listing_images`, `listing_shipping_methods`, `listing_price_history`, `listing_reservations` | `Collection` (physical item), `Identity` (seller/buyer), `Shared` (`Money`) |
-| `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses`, `order_status_history` | `Marketplace` (listing/reservation), `Payment`, `Identity`, `Shared` |
+| `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses`, `order_status_history`; one-time buyer collection import | `Marketplace` (listing/reservation), `Payment`, `Collection` (buyer item/wishlist hook), `Storage` (optional placement), `Identity`, `Shared` |
 | `Payment` | `payments`, `payment_transactions`; the `PaymentProvider` port and fake adapter | `Identity` (buyer), `Shared` (`Money`) |
 | `Shipping` | `shipments`; seller dispatch, buyer receipt confirmation, and sold-item archival | `Order`, `Collection`, `Storage`, `Identity`, `Shared` |
 | `Shared` | cross-cutting value objects, transaction port, and the API exception handler | — |
@@ -230,6 +232,7 @@ sequenceDiagram
     participant Seller
     participant Buyer
     participant Shipping as Shipping application service
+    participant Import as Collection import use case
     participant Workflow as Order workflow
     participant DB as PostgreSQL
 
@@ -246,6 +249,12 @@ sequenceDiagram
     Shipping->>DB: archive sold items + close current placements
     Shipping->>DB: COMMIT
     Shipping-->>Buyer: completed order DTO
+    Buyer->>Import: Confirm language, condition, optional storage
+    Import->>DB: BEGIN; lock completed buyer order
+    Import->>DB: create buyer item + link order item + fulfill wishlist
+    Import->>DB: optionally place in buyer-owned storage
+    Import->>DB: COMMIT
+    Import-->>Buyer: updated order with imported item id
 ```
 
 The role-specific repository methods deliberately return not found for the wrong participant, preventing order-id
@@ -253,7 +262,10 @@ probing. Both commands validate their workflow transition after acquiring a pess
 then locks sold physical items in deterministic UUID order; the order, shipment, immutable status history, item
 archival, and location-history closure therefore either all commit or all roll back. Creating the buyer's new
 physical collection item is kept out of this transaction because the buyer must first confirm condition and choose
-its destination.
+its destination. The later import locks the same buyer order, derives card, variant, price and purchase date from
+the order, and stores the imported collection-item reference directly on the order item. Nullable-pair constraints
+keep the reference and timestamp consistent, while the domain rule and order lock make the operation one-time.
+The source item remains archived, preserving the seller's acquisition data and closed location history.
 
 ## Data conventions that hold across every module
 

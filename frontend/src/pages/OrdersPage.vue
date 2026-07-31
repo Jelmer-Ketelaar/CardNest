@@ -1,19 +1,35 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import type { ShippingMethodCode } from '../types/marketplace'
-import type { Order, OrderCollection } from '../types/order'
+import type { Order, OrderCollection, OrderItem } from '../types/order'
+import type { StorageLocation, StorageLocationCollectionResponse } from '../types/storage'
 import { formatMoney } from '../utils/money'
+
+const languages = [
+  ['en', 'Engels'], ['nl', 'Nederlands'], ['ja', 'Japans'], ['ko', 'Koreaans'], ['de', 'Duits'],
+  ['fr', 'Frans'], ['it', 'Italiaans'], ['es', 'Spaans'], ['pt', 'Portugees'], ['zh', 'Chinees'],
+] as const
+
+const conditions = [
+  ['mint', 'Mint'], ['near_mint', 'Near Mint'], ['excellent', 'Excellent'], ['good', 'Good'],
+  ['light_played', 'Light Played'], ['played', 'Played'], ['poor', 'Poor'],
+] as const
 
 const route = useRoute()
 const orders = ref<Order[]>([])
 const loading = ref(false)
 const updatingOrderId = ref<string | null>(null)
+const importingItemId = ref<string | null>(null)
+const importTarget = ref<{ order: Order; item: OrderItem } | null>(null)
+const storageLocations = ref<StorageLocation[]>([])
+const storageLoaded = ref(false)
 const error = ref('')
 const success = ref('')
+const importForm = reactive({ language: 'en', condition: 'near_mint', storageLocationId: '', notes: '' })
 const completedCheckoutCount = computed(() => {
   const value = typeof route.query.checkedOut === 'string' ? Number.parseInt(route.query.checkedOut, 10) : 0
   return Number.isFinite(value) && value > 0 ? value : 0
@@ -76,6 +92,56 @@ async function updateOrder(order: Order, action: 'mark-shipped' | 'confirm-recei
   }
 }
 
+async function openCollectionImport(order: Order, item: OrderItem): Promise<void> {
+  importTarget.value = { order, item }
+  importForm.language = item.language
+  importForm.condition = item.condition
+  importForm.storageLocationId = ''
+  importForm.notes = ''
+  if (storageLoaded.value) return
+
+  try {
+    const response = await apiRequest<StorageLocationCollectionResponse>('/me/storage-locations')
+    storageLocations.value = response.items
+    storageLoaded.value = true
+  } catch (caught) {
+    error.value = caughtMessage(caught, 'De opslaglocaties konden niet worden geladen.')
+  }
+}
+
+function closeCollectionImport(): void {
+  importTarget.value = null
+}
+
+async function importToCollection(): Promise<void> {
+  const target = importTarget.value
+  if (!target) return
+
+  importingItemId.value = target.item.id
+  error.value = ''
+  success.value = ''
+  const payload: Record<string, string> = {
+    language: importForm.language,
+    condition: importForm.condition,
+  }
+  if (importForm.storageLocationId) payload.storageLocationId = importForm.storageLocationId
+  if (importForm.notes.trim()) payload.notes = importForm.notes.trim()
+
+  try {
+    const updated = await apiRequest<Order>(
+      `/me/orders/${target.order.id}/items/${target.item.id}/import-to-collection`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    )
+    orders.value = orders.value.map((current) => current.id === updated.id ? updated : current)
+    success.value = `${target.item.card.name} is aan je collectie toegevoegd.`
+    closeCollectionImport()
+  } catch (caught) {
+    error.value = caughtMessage(caught, 'De aankoop kon niet aan je collectie worden toegevoegd.')
+  } finally {
+    importingItemId.value = null
+  }
+}
+
 onMounted(() => { void loadOrders() })
 </script>
 
@@ -132,10 +198,21 @@ onMounted(() => { void loadOrders() })
 
         <ul class="order-items">
           <li v-for="item in order.items" :key="item.id">
-            <div>
+            <div class="order-item__details">
               <strong>{{ item.card.name }} · {{ item.card.number }}</strong>
               <span>{{ item.card.set.name }}</span>
               <small>{{ readableCode(item.variant) }} · {{ readableCode(item.condition) }} · {{ item.language.toUpperCase() }}</small>
+              <div class="order-item__import">
+                <BaseButton
+                  v-if="item.collectionImport.available"
+                  variant="secondary"
+                  :disabled="importingItemId === item.id"
+                  @click="openCollectionImport(order, item)"
+                >
+                  Voeg toe aan collectie
+                </BaseButton>
+                <span v-else-if="item.collectionImport.imported" class="badge">Aan collectie toegevoegd</span>
+              </div>
             </div>
             <strong>{{ formatMoney(item.price.amount, item.price.currency) }}</strong>
           </li>
@@ -173,5 +250,49 @@ onMounted(() => { void loadOrders() })
         </ol>
       </article>
     </section>
+
+    <div v-if="importTarget" class="modal-backdrop" @click.self="closeCollectionImport">
+      <section class="panel edit-panel order-import-panel" role="dialog" aria-modal="true" aria-labelledby="import-heading">
+        <p class="eyebrow">Ontvangen aankoop</p>
+        <h2 id="import-heading">{{ importTarget.item.card.name }} toevoegen</h2>
+        <p>Controleer het fysieke exemplaar. Kaart, variant en aankoopprijs komen rechtstreeks uit de order.</p>
+        <form class="edit-form" @submit.prevent="importToCollection">
+          <label class="field">
+            <span>Taal</span>
+            <select v-model="importForm.language" required>
+              <option v-for="language in languages" :key="language[0]" :value="language[0]">{{ language[1] }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Conditie na ontvangst</span>
+            <select v-model="importForm.condition" required>
+              <option v-for="condition in conditions" :key="condition[0]" :value="condition[0]">{{ condition[1] }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Fysieke opslaglocatie</span>
+            <select v-model="importForm.storageLocationId">
+              <option value="">Nog niet plaatsen</option>
+              <option v-for="location in storageLocations" :key="location.id" :value="location.id">
+                {{ location.path.map((entry) => entry.name).join(' › ') }}
+              </option>
+            </select>
+            <RouterLink v-if="storageLoaded && storageLocations.length === 0" :to="{ name: 'storage' }">
+              Maak eerst een opslaglocatie
+            </RouterLink>
+          </label>
+          <label class="field">
+            <span>Notities</span>
+            <textarea v-model="importForm.notes" rows="4" maxlength="5000" />
+          </label>
+          <div class="dialog-actions">
+            <BaseButton variant="secondary" @click="closeCollectionImport">Annuleren</BaseButton>
+            <BaseButton type="submit" :disabled="importingItemId === importTarget.item.id">
+              {{ importingItemId === importTarget.item.id ? 'Toevoegen…' : 'Bevestig en voeg toe' }}
+            </BaseButton>
+          </div>
+        </form>
+      </section>
+    </div>
   </main>
 </template>

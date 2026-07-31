@@ -23,11 +23,13 @@ use App\Marketplace\Domain\Exception\InvalidListing;
 use App\Marketplace\Domain\Exception\InvalidListingTransition;
 use App\Marketplace\Domain\Exception\ListingAlreadyExists;
 use App\Marketplace\Domain\Exception\ListingUnavailable;
+use App\Order\Application\Exception\OrderItemNotFound;
 use App\Order\Application\Exception\OrderNotFound;
 use App\Order\Application\Exception\PaymentFailed;
 use App\Order\Domain\Exception\CartItemNotFound;
 use App\Order\Domain\Exception\EmptyCart;
 use App\Order\Domain\Exception\InvalidCart;
+use App\Order\Domain\Exception\InvalidCollectionImport;
 use App\Order\Domain\Exception\InvalidOrder;
 use App\Order\Domain\Exception\InvalidOrderTransition;
 use App\Order\Domain\Exception\InvalidShippingSelection;
@@ -101,6 +103,8 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof InvalidCart => [409, 'invalid_cart', $exception->getMessage()],
             $exception instanceof InvalidShippingSelection => [422, 'invalid_shipping_selection', $exception->getMessage()],
             $exception instanceof OrderNotFound => [404, 'order_not_found', $exception->getMessage()],
+            $exception instanceof OrderItemNotFound => [404, 'order_item_not_found', $exception->getMessage()],
+            $exception instanceof InvalidCollectionImport => [409, 'invalid_collection_import', $exception->getMessage()],
             $exception instanceof InvalidOrderTransition,
             $exception instanceof InvalidShipment => [409, 'invalid_order_transition', $exception->getMessage()],
             $exception instanceof InvalidOrder,

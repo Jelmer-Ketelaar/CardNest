@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Order\Presentation\Http;
 
 use App\Identity\Domain\Entity\User;
+use App\Order\Application\Dto\ImportOrderItemRequest;
 use App\Order\Application\FindOrders;
+use App\Order\Application\ImportOrderItemToCollection;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
@@ -23,5 +26,16 @@ final readonly class OrderController
     public function get(#[CurrentUser] User $participant, string $id, FindOrders $finder): JsonResponse
     {
         return new JsonResponse($finder->get($participant, $id)->toArray());
+    }
+
+    #[Route('/{id}/items/{itemId}/import-to-collection', methods: ['POST'])]
+    public function importToCollection(
+        #[CurrentUser] User $buyer,
+        string $id,
+        string $itemId,
+        #[MapRequestPayload] ImportOrderItemRequest $request,
+        ImportOrderItemToCollection $service,
+    ): JsonResponse {
+        return new JsonResponse($service->import($buyer, $id, $itemId, $request)->toArray());
     }
 }
