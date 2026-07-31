@@ -46,30 +46,36 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Search the catalog (`GET /api/v1/cards`) filtered by set, name, card number, or rarity, with pagination
 - Look up a single set or card in full detail, including every variant it was printed in (holo, reverse holo,
   illustration rare, ...) drawn from a closed, configurable vocabulary instead of free text
-- Every catalog card keeps a record of the external source(s) it was imported from (source name, external id, raw
-  payload, last sync date), so a future import adapter can refresh data without silently overwriting manual
+- Every catalog card keeps, and exposes, a record of the external source(s) it was imported from (source name,
+  external id, last sync date), so a future import adapter can refresh data without silently overwriting manual
   corrections
-- Catalog data is intentionally public and read-only. User ownership is modeled separately by the Collection module
+- Catalog data is intentionally public and read-only. It describes what a card officially *is* — never who owns one
 - Seed data ships two real-shaped sets and twenty cards for local exploration, including the "Mudkip 19/25" example
   used throughout the product specification
 
-### Physical collection (Collection module)
+### Your collection (Collection module)
 
-- Register one or up to one hundred copies of a catalog card in one action; each physical copy receives its own UUID
-- Record language, controlled card variant, condition, purchase price in integer euro cents, purchase date, seller,
-  and notes
-- Browse and filter only your own collection by card, set, name, number, language, variant, condition, and status
-- Detect duplicates by catalog card + language + variant while excluding archived cards from the owned count
-- Update or archive an owned item; archived items remain queryable for history but become immutable
-- Object-level authorization deliberately returns the same `404` for unknown and other users' private items
+- Register one or more physical copies of a catalog card in a single call — pick the variant, language, and
+  condition, plus optional purchase price/date, seller and notes. Asking for `quantity: 3` creates three separate
+  physical-card records, never a single row with a counter, because each copy can later diverge (different sale,
+  different binder slot, different condition over time)
+- Search and page through your own collection, filtered by card, set, name, number, language, variant, condition or
+  status
+- Update any detail later, or archive a card (a soft removal that keeps its history instead of deleting it)
+- Automatic duplicate detection: every item reports how many of your **in-collection** copies share the same card,
+  language and variant
+- Strict ownership checks: your collection is only ever visible to you, and a wrong or foreign id behaves exactly
+  like it doesn't exist
+- On the frontend, a full "My collection" page ties this together: search the catalog, add a card with all its
+  details, filter/paginate in a grid or list view, edit an item in a modal, and archive it
 
-### Frontend shell
+### Frontend
 
-- Vue 3 + TypeScript single-page app with registration, login, dashboard, and an authenticated collection workspace
-- Search the catalog, add one or more physical cards, switch between grid/list views, filter, edit, see duplicate
-  counts, and archive an item from the collection workspace
+- Vue 3 + TypeScript single-page app: registration, login, a dashboard, and the collection page above, behind a
+  route guard
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
-- A typed API client and a Pinia store for authentication state
+- A typed API client with structured error handling, a Pinia store for authentication state, and small utilities
+  (e.g. money formatting for minor-unit amounts)
 
 ### Platform
 
@@ -98,16 +104,16 @@ and international shipping are explicitly out of scope for the MVP described in 
 
 ## Guiding principles
 
-A few rules carry through every module, whether it exists yet or not:
+A few rules carry through every module built so far, and are meant to hold for every module still to come:
 
 - Register a physical card once, then reuse that registration everywhere: collection, binder, wishlist, listing,
   sale, and financial history.
 - The backend is always the source of truth. The frontend never enforces a business rule on its own.
 - Money is always an integer amount plus a currency code, never a floating-point number.
 - Every endpoint checks object ownership, not just the caller's role — a regular user can only ever touch their own
-  data.
+  data, and a foreign id returns "not found" rather than "forbidden".
 - Catalog data (what a card *is*) and collection data (what a specific user *owns*) are strictly separate concepts,
-  modeled as different entities.
+  modeled as different entities in different modules.
 
 ## Architecture
 
@@ -126,8 +132,23 @@ Doctrine entities never cross the API boundary: controllers only ever return exp
 interfaces live in `Domain`; their Doctrine-backed implementations live in `Infrastructure` and are wired together
 in `config/services.yaml`, so persistence details can change without touching business logic.
 
-Implemented modules today: `Identity`, `Catalog`, `Collection`, and `Shared`. Planned modules follow the same shape
-(see "What's not built yet" above).
+```mermaid
+flowchart TD
+    Identity[Identity: users, bearer tokens]
+    Catalog[Catalog: series, sets, cards, variants]
+    Collection[Collection: physical cards a user owns]
+    Shared[Shared: Money, JSON error handling]
+
+    Collection --> Catalog
+    Collection --> Identity
+    Catalog --> Shared
+    Collection --> Shared
+    Identity --> Shared
+```
+
+Implemented modules today: `Identity`, `Catalog`, `Collection`, `Shared`. Planned modules follow the same shape (see
+"What's not built yet" above). For a deeper walkthrough — including a request-sequence diagram and the conventions
+every module follows — see [docs/architecture.md](docs/architecture.md).
 
 ## Tech stack
 
@@ -147,42 +168,13 @@ cardnest/
   backend/     Symfony JSON API (see backend/src for the module breakdown above)
   frontend/    Vue 3 + TypeScript single-page app
   docker/      Dockerfiles for the backend and frontend images
-  docs/        API contract and other reference documentation
+  docs/        API contract and architecture reference
   compose.yaml Local multi-service Docker Compose stack
 ```
 
-## Run locally
+## Learn more
 
-Requirements: Docker with Docker Compose and Git.
-
-```bash
-cp .env.example .env
-cp backend/.env.example backend/.env.local
-cp frontend/.env.example frontend/.env.local
-docker compose run --rm backend composer install
-docker compose run --rm --no-deps frontend npm install
-docker compose up -d postgres redis
-docker compose run --rm backend php bin/console doctrine:database:create --if-not-exists
-docker compose run --rm backend php bin/console doctrine:migrations:migrate --no-interaction
-docker compose run --rm backend php bin/console doctrine:fixtures:load --append
-docker compose up backend frontend
-```
-
-Open the frontend at <http://localhost:5174>. The API is available at <http://localhost:8080/api/v1>; its health
-endpoint is `/api/v1/health`.
-
-## Quality checks
-
-```bash
-docker compose run --rm -e APP_ENV=test backend php bin/console doctrine:database:create --if-not-exists
-docker compose run --rm -e APP_ENV=test backend php bin/console doctrine:migrations:migrate --no-interaction
-docker compose run --rm -e APP_ENV=test backend php bin/phpunit
-docker compose run --rm backend vendor/bin/phpstan analyse --no-progress --memory-limit=512M
-docker compose run --rm backend vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes
-docker compose run --rm --no-deps frontend npm test
-docker compose run --rm --no-deps frontend npm run build
-docker compose run --rm --no-deps frontend npm run test:e2e
-```
-
-The frontend image includes Chromium and its operating-system dependencies for Playwright. Rebuild it after changing
-the Playwright version in `frontend/package.json`.
+- [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes
+- [docs/architecture.md](docs/architecture.md) — system diagram, module layering, and an end-to-end request walkthrough
+- [CONTRIBUTING.md](CONTRIBUTING.md) — ground rules, coding standards, and the workflow for adding the next module
+- [frontend/README.md](frontend/README.md) — frontend structure, API-client conventions, and how to add a page
