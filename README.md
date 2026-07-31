@@ -78,10 +78,22 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Automatically close a current placement when its collection item is archived
 - Build and edit the hierarchy in a dedicated authenticated storage page
 
+### Visual binders (Binder module)
+
+- Create configurable 2×2, 3×3, 4×3, or custom binders with single- or double-sided physical pages
+- Browse every page as a visual grid and place physical collection items by drag-and-drop or an accessible
+  click-to-select flow
+- Reserve a slot for a missing catalog card, add a manual placeholder, or clear it again
+- Move an item atomically between storage locations and binder slots while preserving one continuous placement
+  history
+- Prevent two cards from occupying the same slot and reject cards that do not match a catalog-card reservation
+- Keep binder data private to its owner; foreign binder, slot, location, and collection-item identifiers are hidden
+  behind the same owner-safe not-found behavior
+
 ### Frontend
 
-- Vue 3 + TypeScript single-page app: registration, login, dashboard, collection, and storage pages behind a route
-  guard
+- Vue 3 + TypeScript single-page app: registration, login, dashboard, collection, storage, and visual binder pages
+  behind a route guard
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
 - A typed API client with structured error handling, a Pinia store for authentication state, and small utilities
   (e.g. money formatting for minor-unit amounts)
@@ -100,8 +112,6 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Binder** — visual binder pages/slots, drag-and-drop placement, and placeholders for missing cards in an
-  incomplete set
 - **Wishlist** — tracking wanted cards per set/variant/condition/price and auto-matching them against purchases
 - **Marketplace, Order & Payment** — listings, shopping cart and checkout, temporary stock reservations, a fake
   payment provider for development, and the full order lifecycle
@@ -147,20 +157,25 @@ flowchart TD
     Catalog[Catalog: series, sets, cards, variants]
     Collection[Collection: physical cards a user owns]
     Storage[Storage: hierarchy and location history]
+    Binder[Binder: visual pages, slots, placeholders]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
     Collection --> Identity
     Storage --> Collection
     Storage --> Identity
+    Binder --> Collection
+    Binder --> Storage
+    Binder --> Catalog
+    Binder --> Identity
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
 ```
 
-Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Shared`. Planned modules follow the same
-shape (see "What's not built yet" above). For a deeper walkthrough — including a request-sequence diagram and the
-conventions every module follows — see [docs/architecture.md](docs/architecture.md).
+Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Shared`. Planned modules follow
+the same shape (see "What's not built yet" above). For a deeper walkthrough — including a request-sequence diagram
+and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
 
 ## Tech stack
 

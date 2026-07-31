@@ -47,5 +47,8 @@ services:
     App\Storage\Domain\Repository\CollectionItemLocationRepository:
         alias: App\Storage\Infrastructure\Persistence\DoctrineCollectionItemLocationRepository
 
+    App\Binder\Domain\Repository\BinderRepository:
+        alias: App\Binder\Infrastructure\Persistence\DoctrineBinderRepository
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

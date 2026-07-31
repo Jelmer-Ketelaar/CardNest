@@ -23,6 +23,7 @@ async function logout(): Promise<void> {
         <RouterLink :to="{ name: 'dashboard' }">Dashboard</RouterLink>
         <RouterLink :to="{ name: 'collection' }">Collectie</RouterLink>
         <RouterLink :to="{ name: 'storage' }">Opslag</RouterLink>
+        <RouterLink :to="{ name: 'binders' }">Binders</RouterLink>
       </nav>
       <BaseButton variant="secondary" @click="logout">Uitloggen</BaseButton>
     </header>

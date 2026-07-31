@@ -75,6 +75,7 @@ const createForm = reactive({
 const editingItem = ref<CollectionItem | null>(null)
 const editVariants = ref<CatalogCardVariant[]>([])
 const originalLocationId = ref('')
+const currentBinderPlacementLabel = ref('')
 const editSaving = ref(false)
 const editForm = reactive({
   variantId: '',
@@ -238,7 +239,18 @@ async function startEdit(item: CollectionItem): Promise<void> {
     editForm.purchasedAt = item.purchase.purchasedAt ?? ''
     editForm.sellerName = item.purchase.sellerName ?? ''
     editForm.notes = item.notes ?? ''
-    editForm.locationId = location.current?.location.id ?? ''
+    if (location.current?.binderSlot) {
+      editForm.locationId = `binder:${location.current.binderSlot.id}`
+      currentBinderPlacementLabel.value = [
+        location.current.binderSlot.binder.name,
+        `pagina ${location.current.binderSlot.page.number}`,
+        location.current.binderSlot.page.side === 'front' ? 'voorzijde' : 'achterzijde',
+        `vak ${location.current.binderSlot.position}`,
+      ].join(' · ')
+    } else {
+      editForm.locationId = location.current?.location?.id ?? ''
+      currentBinderPlacementLabel.value = ''
+    }
     originalLocationId.value = editForm.locationId
   } catch (caught) {
     error.value = caughtMessage(caught, 'De kaart kon niet worden geopend voor bewerking.')
@@ -248,6 +260,7 @@ async function startEdit(item: CollectionItem): Promise<void> {
 function closeEdit(): void {
   editingItem.value = null
   editVariants.value = []
+  currentBinderPlacementLabel.value = ''
 }
 
 async function saveEdit(): Promise<void> {
@@ -292,7 +305,7 @@ async function saveEdit(): Promise<void> {
     if (editForm.locationId !== originalLocationId.value) {
       if (editForm.locationId === '') {
         await apiRequest<void>(`/me/collection-items/${item.id}/location`, { method: 'DELETE' })
-      } else {
+      } else if (!editForm.locationId.startsWith('binder:')) {
         await apiRequest<CollectionItemLocationResponse>(`/me/collection-items/${item.id}/location`, {
           method: 'POST',
           body: JSON.stringify({ locationId: editForm.locationId }),
@@ -518,6 +531,9 @@ onMounted(() => {
             <span>Fysieke opslaglocatie</span>
             <select v-model="editForm.locationId">
               <option value="">Niet geplaatst</option>
+              <option v-if="currentBinderPlacementLabel" :value="originalLocationId">
+                {{ currentBinderPlacementLabel }}
+              </option>
               <option v-for="location in storageLocations" :key="location.id" :value="location.id">
                 {{ location.path.map((entry) => entry.name).join(' › ') }}
               </option>

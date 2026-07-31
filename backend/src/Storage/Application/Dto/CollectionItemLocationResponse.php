@@ -36,12 +36,31 @@ final readonly class CollectionItemLocationResponse
     /** @return array<string, mixed> */
     private function entry(CollectionItemLocationHistory $history): array
     {
+        $location = $history->getStorageLocation();
+        $slot = $history->getBinderSlot();
+
         return [
             'id' => $history->getId()->toRfc4122(),
-            'location' => (new StorageLocationResponse(
-                $history->getStorageLocation(),
-                $this->itemCounts[$history->getStorageLocation()->getId()->toRfc4122()] ?? 0,
-            ))->toArray(),
+            'type' => $location !== null ? 'storage_location' : 'binder_slot',
+            'location' => $location !== null
+                ? (new StorageLocationResponse(
+                    $location,
+                    $this->itemCounts[$location->getId()->toRfc4122()] ?? 0,
+                ))->toArray()
+                : null,
+            'binderSlot' => $slot !== null ? [
+                'id' => $slot->getId()->toRfc4122(),
+                'position' => $slot->getPosition(),
+                'page' => [
+                    'id' => $slot->getPage()->getId()->toRfc4122(),
+                    'number' => $slot->getPage()->getPageNumber(),
+                    'side' => $slot->getPage()->getSide()->value,
+                ],
+                'binder' => [
+                    'id' => $slot->getPage()->getBinder()->getId()->toRfc4122(),
+                    'name' => $slot->getPage()->getBinder()->getName(),
+                ],
+            ] : null,
             'placedAt' => $history->getPlacedAt()->format(DATE_ATOM),
             'removedAt' => $history->getRemovedAt()?->format(DATE_ATOM),
             'current' => $history->isCurrent(),

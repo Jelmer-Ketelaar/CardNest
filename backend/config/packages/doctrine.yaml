@@ -38,6 +38,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Storage/Domain/Entity'
                 prefix: 'App\Storage\Domain\Entity'
                 alias: Storage
+            Binder:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Binder/Domain/Entity'
+                prefix: 'App\Binder\Domain\Entity'
+                alias: Binder
 
 when@test:
     doctrine:

@@ -161,7 +161,8 @@ while `path` returns the complete root-to-location trail needed to answer “whe
 /api/v1/me/storage-locations/{id}` returns one location. `PATCH /api/v1/me/storage-locations/{id}` changes `name`,
 `type`, or its parent; use `clearParent: true` to move it to the root. Cycles and cross-owner parents return `422`.
 
-`POST /api/v1/me/collection-items/{itemId}/location` places or moves one physical card atomically:
+`POST /api/v1/me/collection-items/{itemId}/location` places or moves one physical card into a generic storage
+location atomically:
 
 ```json
 { "locationId": "12403b06-a415-4f58-a45a-57c8ef748b16" }
@@ -173,7 +174,66 @@ The previous current placement is closed before the new placement is inserted, i
 `GET /api/v1/me/collection-items/{itemId}/location` returns the current placement. `GET
 /api/v1/me/collection-items/{itemId}/location-history` additionally returns all past placements, newest first.
 Archived collection items cannot be moved. Archiving an item automatically closes its current placement but keeps
-the history. Unknown and other users' item/location UUIDs all use the same owner-safe `404` behavior.
+the history. A placement response identifies its target with `type: storage_location` or `type: binder_slot`, and
+only one of `location` and `binderSlot` is populated. Unknown and other users' item/location UUIDs all use the same
+owner-safe `404` behavior.
+
+## Visual binders
+
+Protected (`ROLE_USER`) and owner-scoped. A binder owns immutable page dimensions and creates all page surfaces and
+slots in the same transaction. `pageCount` is the number of physical pages; a double-sided binder exposes both a
+`front` and `back` surface for each page.
+
+`GET /api/v1/me/binders` lists binder summaries. `GET /api/v1/me/binders/{id}` returns the complete page and slot
+layout, including current physical cards and optional placeholders.
+
+`POST /api/v1/me/binders`
+
+```json
+{
+  "name": "Water collection",
+  "rows": 3,
+  "columns": 3,
+  "pageCount": 12,
+  "doubleSided": true,
+  "layoutStrategy": "set_number",
+  "parentLocationId": "fd542305-16c4-46a8-a36d-d776b7e0437c"
+}
+```
+
+Rows and columns are each limited to 1–6, physical pages to 1–100, and a binder to 2,000 slots. `parentLocationId`
+is optional and links the binder to an owned generic storage location. `PATCH /api/v1/me/binders/{id}` can change
+the name, planned layout strategy, or parent location (`clearParentLocation: true` unlinks it); dimensions are
+immutable after creation.
+
+`POST /api/v1/me/binders/{id}/slots/{slotId}/assign`
+
+```json
+{ "collectionItemId": "2ff18db6-72d1-4fcf-af48-87f84d4ab4b2" }
+```
+
+Assignment is atomic: the item's previous generic location or binder slot is closed before the new placement is
+created. The database prevents an item from having multiple current placements and prevents a slot from holding
+multiple current items. An occupied slot returns `409 binder_slot_occupied`; a reserved slot only accepts the
+matching catalog card and otherwise returns `409 binder_slot_reserved`. `DELETE
+/api/v1/me/binders/{id}/slots/{slotId}/assignment` removes the current card while preserving its placement history.
+
+`PATCH /api/v1/me/binders/{id}/slots/{slotId}/placeholder` accepts exactly one of:
+
+```json
+{ "catalogCardId": "9ddf1d18-42ef-4a52-93d3-ef82e40fac19" }
+```
+
+```json
+{ "label": "Energy divider" }
+```
+
+```json
+{ "clear": true }
+```
+
+A catalog-card placeholder reserves a missing card slot without inventing a physical `CollectionItem`. Layout
+strategies are stored as planner intent; automatic rearrangement is not part of this endpoint set.
 
 ## Closed vocabularies
 
@@ -184,6 +244,8 @@ the history. Unknown and other users' item/location UUIDs all use the same owner
 | Card variant | `normal`, `holo`, `reverse_holo`, `cosmos_holo`, `stamped`, `promo`, `first_edition`, `unlimited`, `shadowless`, `alternate_art`, `illustration_rare`, `special_illustration_rare`, `gold`, `rainbow`, `master_ball`, `poke_ball`, `other` |
 | Collection item status | `in_collection`, `archived` |
 | Storage location type | `binder`, `box`, `top_loader_box`, `graded_card_box`, `display`, `safe`, `other` |
+| Binder page side | `front`, `back` |
+| Binder layout strategy | `set_number`, `pokedex_number`, `alphabetical`, `collectible_type`, `rarity`, `value`, `purchase_date`, `custom` |
 | Card set status | `announced`, `active`, `out_of_print`, `unknown` |
 
 ## Errors
@@ -216,5 +278,9 @@ Every error response follows the same shape:
 | `collection_item_archived` | 409 | Attempted to change an archived collection item |
 | `storage_location_not_found` | 404 | Location doesn't exist, or isn't owned by the caller |
 | `invalid_storage_hierarchy` | 422 | Parent creates a cycle or belongs to another user |
+| `binder_not_found` | 404 | Binder/slot doesn't exist, or isn't owned by the caller |
+| `binder_slot_occupied` | 409 | Another physical item already occupies the target slot |
+| `binder_slot_reserved` | 409 | Physical card doesn't match the catalog-card reservation |
+| `invalid_binder_configuration` | 422 | Binder dimensions, parent, or slot configuration is invalid |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

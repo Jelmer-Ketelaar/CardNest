@@ -22,7 +22,14 @@ export interface StorageLocationCollectionResponse {
 
 export interface CollectionItemLocationEntry {
   id: string
-  location: StorageLocation
+  type: 'storage_location' | 'binder_slot'
+  location: StorageLocation | null
+  binderSlot: {
+    id: string
+    position: number
+    page: { id: string; number: number; side: 'front' | 'back' }
+    binder: { id: string; name: string }
+  } | null
   placedAt: string
   removedAt: string | null
   current: boolean

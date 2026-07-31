@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Storage\Infrastructure\Persistence;
 
+use App\Binder\Domain\Entity\Binder;
+use App\Binder\Domain\Entity\BinderSlot;
+use App\Binder\Domain\Exception\BinderSlotOccupied;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Storage\Domain\Entity\CollectionItemLocationHistory;
@@ -22,16 +25,19 @@ final readonly class DoctrineCollectionItemLocationRepository implements Collect
 
     public function currentForItem(CollectionItem $item): ?CollectionItemLocationHistory
     {
-        return $this->findCurrent($item, false);
+        return $this->findCurrent($item);
     }
 
     public function historyForItem(CollectionItem $item): array
     {
         /** @var list<CollectionItemLocationHistory> $history */
         $history = $this->entityManager->createQueryBuilder()
-            ->select('h', 'l')
+            ->select('h', 'l', 'bs', 'bp', 'b')
             ->from(CollectionItemLocationHistory::class, 'h')
-            ->join('h.storageLocation', 'l')
+            ->leftJoin('h.storageLocation', 'l')
+            ->leftJoin('h.binderSlot', 'bs')
+            ->leftJoin('bs.page', 'bp')
+            ->leftJoin('bp.binder', 'b')
             ->where('h.collectionItem = :item')
             ->setParameter('item', $item)
             ->orderBy('h.placedAt', 'DESC')
@@ -46,31 +52,84 @@ final readonly class DoctrineCollectionItemLocationRepository implements Collect
     {
         return $this->entityManager->wrapInTransaction(function () use ($item, $location): CollectionItemLocationHistory {
             $this->entityManager->lock($item, LockMode::PESSIMISTIC_WRITE);
-            $current = $this->findCurrent($item, true);
-            if ($current instanceof CollectionItemLocationHistory
-                && $current->getStorageLocation()->getId()->equals($location->getId())) {
+            $current = $this->findCurrent($item);
+            if ($current?->getStorageLocation()?->getId()->equals($location->getId())) {
                 return $current;
             }
 
             $now = new DateTimeImmutable();
-            $current?->remove($now);
-            if ($current instanceof CollectionItemLocationHistory) {
-                // PostgreSQL checks the partial unique index during INSERT. Flush the closed
-                // history row first while both writes remain in the same transaction.
-                $this->entityManager->flush();
-            }
-            $history = new CollectionItemLocationHistory($item, $location, $now);
+            $this->closeCurrent($current, $now);
+            $history = CollectionItemLocationHistory::inStorage($item, $location, $now);
             $this->entityManager->persist($history);
 
             return $history;
         });
     }
 
+    public function placeInBinderSlot(CollectionItem $item, BinderSlot $slot): CollectionItemLocationHistory
+    {
+        return $this->entityManager->wrapInTransaction(function () use ($item, $slot): CollectionItemLocationHistory {
+            $this->entityManager->lock($item, LockMode::PESSIMISTIC_WRITE);
+            $this->entityManager->lock($slot, LockMode::PESSIMISTIC_WRITE);
+            $target = $this->findCurrentForBinderSlot($slot);
+            if ($target instanceof CollectionItemLocationHistory
+                && !$target->getCollectionItem()->getId()->equals($item->getId())) {
+                throw new BinderSlotOccupied('Dit bindervak bevat al een andere fysieke kaart.');
+            }
+
+            $current = $this->findCurrent($item);
+            if ($current?->getBinderSlot()?->getId()->equals($slot->getId())) {
+                return $current;
+            }
+
+            $now = new DateTimeImmutable();
+            $this->closeCurrent($current, $now);
+            $history = CollectionItemLocationHistory::inBinderSlot($item, $slot, $now);
+            $this->entityManager->persist($history);
+
+            return $history;
+        });
+    }
+
+    public function currentForBinderSlot(BinderSlot $slot): ?CollectionItemLocationHistory
+    {
+        return $this->findCurrentForBinderSlot($slot);
+    }
+
+    public function currentItemsForBinder(Binder $binder): array
+    {
+        /** @var list<CollectionItemLocationHistory> $placements */
+        $placements = $this->entityManager->createQueryBuilder()
+            ->select('h', 'i', 'c', 's', 'v', 'bs', 'bp')
+            ->from(CollectionItemLocationHistory::class, 'h')
+            ->join('h.collectionItem', 'i')
+            ->join('i.catalogCard', 'c')
+            ->join('c.set', 's')
+            ->join('i.variant', 'v')
+            ->join('h.binderSlot', 'bs')
+            ->join('bs.page', 'bp')
+            ->where('bp.binder = :binder')
+            ->andWhere('h.removedAt IS NULL')
+            ->setParameter('binder', $binder)
+            ->getQuery()
+            ->getResult();
+
+        $items = [];
+        foreach ($placements as $placement) {
+            $slot = $placement->getBinderSlot();
+            if ($slot instanceof BinderSlot) {
+                $items[$slot->getId()->toRfc4122()] = $placement->getCollectionItem();
+            }
+        }
+
+        return $items;
+    }
+
     public function removeCurrent(CollectionItem $item): void
     {
         $this->entityManager->wrapInTransaction(function () use ($item): void {
             $this->entityManager->lock($item, LockMode::PESSIMISTIC_WRITE);
-            $this->findCurrent($item, true)?->remove();
+            $this->findCurrent($item)?->remove();
         });
     }
 
@@ -97,24 +156,50 @@ final readonly class DoctrineCollectionItemLocationRepository implements Collect
         return $counts;
     }
 
-    private function findCurrent(CollectionItem $item, bool $forUpdate): ?CollectionItemLocationHistory
+    private function findCurrent(CollectionItem $item): ?CollectionItemLocationHistory
     {
         $query = $this->entityManager->createQueryBuilder()
-            ->select('h', 'l')
+            ->select('h', 'l', 'bs')
             ->from(CollectionItemLocationHistory::class, 'h')
-            ->join('h.storageLocation', 'l')
+            ->leftJoin('h.storageLocation', 'l')
+            ->leftJoin('h.binderSlot', 'bs')
             ->where('h.collectionItem = :item')
             ->andWhere('h.removedAt IS NULL')
             ->setParameter('item', $item)
             ->getQuery();
 
-        if ($forUpdate) {
-            $query->setLockMode(LockMode::PESSIMISTIC_WRITE);
-        }
+        /** @var CollectionItemLocationHistory|null $history */
+        $history = $query->getOneOrNullResult();
+
+        return $history;
+    }
+
+    private function findCurrentForBinderSlot(BinderSlot $slot): ?CollectionItemLocationHistory
+    {
+        $query = $this->entityManager->createQueryBuilder()
+            ->select('h', 'i')
+            ->from(CollectionItemLocationHistory::class, 'h')
+            ->join('h.collectionItem', 'i')
+            ->where('h.binderSlot = :slot')
+            ->andWhere('h.removedAt IS NULL')
+            ->setParameter('slot', $slot)
+            ->getQuery();
 
         /** @var CollectionItemLocationHistory|null $history */
         $history = $query->getOneOrNullResult();
 
         return $history;
+    }
+
+    private function closeCurrent(?CollectionItemLocationHistory $current, DateTimeImmutable $removedAt): void
+    {
+        if (!$current instanceof CollectionItemLocationHistory) {
+            return;
+        }
+
+        $current->remove($removedAt);
+        // PostgreSQL checks partial unique indexes during INSERT. Flush the closed
+        // history row first while both writes remain in the same transaction.
+        $this->entityManager->flush();
     }
 }

@@ -64,10 +64,18 @@ flowchart TD
     Identity[Identity: users, bearer tokens]
     Catalog[Catalog: series, sets, cards, variants]
     Collection[Collection: physical cards a user owns]
+    Storage[Storage: hierarchy and placement history]
+    Binder[Binder: visual pages and slots]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
     Collection --> Identity
+    Storage --> Collection
+    Storage --> Identity
+    Binder --> Collection
+    Binder --> Storage
+    Binder --> Catalog
+    Binder --> Identity
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
@@ -78,11 +86,13 @@ flowchart TD
 | `Identity` | `users`, `auth_tokens` | `Shared` |
 | `Catalog` | `card_series`, `card_sets`, `catalog_cards`, `card_variants`, `card_external_references` | `Shared` |
 | `Collection` | `collection_items` | `Catalog` (which card/variant), `Identity` (owner), `Shared` (`Money`) |
+| `Storage` | `storage_locations`, `collection_item_location_history` | `Collection` (physical item), `Identity` (owner) |
+| `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
 | `Shared` | cross-cutting value objects and the API exception handler | — |
 
-Planned modules (`Storage`, `Binder`, `Wishlist`, `Marketplace`, `Order`, `Payment`, `Shipping`, `Review`,
-`Notification`, `Pricing`, `Moderation`, `Reporting`) will slot in the same way, each adding one more layer of
-dependency on `Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
+Planned modules (`Wishlist`, `Marketplace`, `Order`, `Payment`, `Shipping`, `Review`, `Notification`, `Pricing`,
+`Moderation`, `Reporting`) will slot in the same way, each adding one more layer of dependency on
+`Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
 
 `App\Shared\Infrastructure\Http\JsonExceptionSubscriber` is the one place that turns a thrown domain/application
 exception into a structured HTTP error response (status code + machine-readable `code` + message). Every module adds

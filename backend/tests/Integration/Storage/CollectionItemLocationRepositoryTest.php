@@ -62,7 +62,9 @@ final class CollectionItemLocationRepositoryTest extends KernelTestCase
         self::assertFalse($first->isCurrent());
         self::assertTrue($current->isCurrent());
         self::assertCount(2, $history);
-        self::assertSame($this->secondLocation->getId()->toRfc4122(), $history[0]->getStorageLocation()->getId()->toRfc4122());
+        $currentLocation = $history[0]->getStorageLocation();
+        self::assertNotNull($currentLocation);
+        self::assertSame($this->secondLocation->getId()->toRfc4122(), $currentLocation->getId()->toRfc4122());
         self::assertSame(1, $this->repository->currentItemCounts($this->owner)[$this->secondLocation->getId()->toRfc4122()] ?? null);
     }
 

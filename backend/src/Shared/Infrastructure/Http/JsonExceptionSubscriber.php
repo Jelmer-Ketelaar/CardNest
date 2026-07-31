@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace App\Shared\Infrastructure\Http;
 
+use App\Binder\Application\Exception\BinderNotFound;
+use App\Binder\Application\Exception\BinderSlotNotFound;
+use App\Binder\Domain\Exception\BinderSlotOccupied;
+use App\Binder\Domain\Exception\BinderSlotReservationMismatch;
+use App\Binder\Domain\Exception\InvalidBinderConfiguration;
 use App\Collection\Application\Exception\CardVariantUnavailable;
 use App\Collection\Application\Exception\CatalogCardUnavailable;
 use App\Collection\Application\Exception\CollectionItemNotFound;
@@ -13,6 +18,7 @@ use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\InvalidCredentials;
 use App\Storage\Application\Exception\StorageLocationNotFound;
 use App\Storage\Domain\Exception\InvalidStorageHierarchy;
+use App\Storage\Domain\Exception\InvalidStorageTarget;
 use App\Storage\Domain\Exception\StorageOwnerMismatch;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
@@ -47,7 +53,13 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof ArchivedCollectionItemCannotBeChanged => [409, 'collection_item_archived', $exception->getMessage()],
             $exception instanceof StorageLocationNotFound => [404, 'storage_location_not_found', $exception->getMessage()],
             $exception instanceof InvalidStorageHierarchy,
+            $exception instanceof InvalidStorageTarget,
             $exception instanceof StorageOwnerMismatch => [422, 'invalid_storage_hierarchy', $exception->getMessage()],
+            $exception instanceof BinderNotFound,
+            $exception instanceof BinderSlotNotFound => [404, 'binder_not_found', $exception->getMessage()],
+            $exception instanceof BinderSlotOccupied => [409, 'binder_slot_occupied', $exception->getMessage()],
+            $exception instanceof BinderSlotReservationMismatch => [409, 'binder_slot_reserved', $exception->getMessage()],
+            $exception instanceof InvalidBinderConfiguration => [422, 'invalid_binder_configuration', $exception->getMessage()],
             $exception instanceof HttpExceptionInterface => [$exception->getStatusCode(), 'request_failed', $exception->getMessage()],
             default => [500, 'internal_error', 'Er is een onverwachte fout opgetreden.'],
         };
