@@ -452,6 +452,7 @@ onMounted(() => {
         <span>Status</span>
         <select v-model="filters.status">
           <option value="in_collection">In collectie</option>
+          <option value="for_sale">Te koop</option>
           <option value="archived">Gearchiveerd</option>
         </select>
       </label>
@@ -485,12 +486,15 @@ onMounted(() => {
           </dl>
           <p v-if="item.notes" class="card-notes">{{ item.notes }}</p>
           <div v-if="item.status === 'in_collection'" class="card-actions">
+            <RouterLink class="button button--primary" :to="{ name: 'my-listings', query: { itemId: item.id } }">
+              Te koop zetten
+            </RouterLink>
             <BaseButton variant="secondary" @click="startEdit(item)">Bewerken</BaseButton>
             <BaseButton variant="danger" :disabled="archivingId === item.id" @click="archiveItem(item)">
               {{ archivingId === item.id ? 'Archiveren…' : 'Archiveren' }}
             </BaseButton>
           </div>
-          <span v-else class="badge">Gearchiveerd</span>
+          <span v-else class="badge">{{ item.status === 'for_sale' ? 'Actief te koop' : 'Gearchiveerd' }}</span>
         </div>
       </article>
     </section>

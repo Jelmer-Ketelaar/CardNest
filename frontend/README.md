@@ -32,9 +32,10 @@ directly (or through a store, for state that needs to be shared, like the logged
   callers can show `error.message` directly or map `error.details` onto form fields.
 - Returns `undefined` for `204 No Content` responses (used by logout and archiving a collection item).
 
-Session state is intentionally minimal: `stores/auth.ts` holds only the current `user`; the token itself lives in
-`localStorage` under `cardnest.authToken`, which is also what `router/index.ts`'s navigation guard checks for
-routes marked `meta: { requiresAuth: true }`.
+Session state is intentionally minimal: `stores/auth.ts` holds the current `user`, a reactive token mirror, and the
+derived `isAuthenticated` flag. The token is persisted in `localStorage` under `cardnest.authToken`, which is also
+what `router/index.ts`'s navigation guard checks for routes marked `meta: { requiresAuth: true }`. Public routes,
+including the marketplace, remain usable without a session.
 
 ## Adding a page or feature
 

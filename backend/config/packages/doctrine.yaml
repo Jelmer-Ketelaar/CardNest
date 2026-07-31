@@ -50,6 +50,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Wishlist/Domain/Entity'
                 prefix: 'App\Wishlist\Domain\Entity'
                 alias: Wishlist
+            Marketplace:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Marketplace/Domain/Entity'
+                prefix: 'App\Marketplace\Domain\Entity'
+                alias: Marketplace
 
 when@test:
     doctrine:

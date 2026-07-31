@@ -56,7 +56,7 @@ final readonly class UpdateCollectionItem
 
         $this->collectionItems->save($item);
         $counts = $this->collectionItems->duplicateCounts($owner);
-        $quantity = $item->getStatus() === CollectionItemStatus::InCollection
+        $quantity = $item->getStatus() !== CollectionItemStatus::Archived
             ? $counts[$item->duplicateKey()] ?? 1
             : 0;
 

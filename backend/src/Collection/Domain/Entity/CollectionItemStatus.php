@@ -7,6 +7,7 @@ namespace App\Collection\Domain\Entity;
 enum CollectionItemStatus: string
 {
     case InCollection = 'in_collection';
+    case ForSale = 'for_sale';
     case Archived = 'archived';
 
     /** @return list<string> */

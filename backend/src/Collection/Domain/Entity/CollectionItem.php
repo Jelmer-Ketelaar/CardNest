@@ -8,6 +8,7 @@ use App\Catalog\Domain\Entity\CardVariant;
 use App\Catalog\Domain\Entity\CatalogCard;
 use App\Collection\Domain\Exception\ArchivedCollectionItemCannotBeChanged;
 use App\Collection\Domain\Exception\CardVariantDoesNotBelongToCard;
+use App\Collection\Domain\Exception\ListedCollectionItemCannotBeChanged;
 use App\Identity\Domain\Entity\User;
 use App\Shared\Domain\ValueObject\Money;
 use DateTimeImmutable;
@@ -200,8 +201,31 @@ final class CollectionItem
         if ($this->status === CollectionItemStatus::Archived) {
             return;
         }
+        if ($this->status === CollectionItemStatus::ForSale) {
+            throw new ListedCollectionItemCannotBeChanged('Een actief aangeboden kaart kan niet worden gearchiveerd.');
+        }
 
         $this->status = CollectionItemStatus::Archived;
+        $this->touch();
+    }
+
+    public function markForSale(): void
+    {
+        if ($this->status !== CollectionItemStatus::InCollection) {
+            throw new ListedCollectionItemCannotBeChanged('Alleen een beschikbare collectiekaart kan worden aangeboden.');
+        }
+
+        $this->status = CollectionItemStatus::ForSale;
+        $this->touch();
+    }
+
+    public function removeFromSale(): void
+    {
+        if ($this->status !== CollectionItemStatus::ForSale) {
+            return;
+        }
+
+        $this->status = CollectionItemStatus::InCollection;
         $this->touch();
     }
 
@@ -223,6 +247,9 @@ final class CollectionItem
     {
         if ($this->status === CollectionItemStatus::Archived) {
             throw new ArchivedCollectionItemCannotBeChanged('Een gearchiveerde collectiekaart kan niet worden gewijzigd.');
+        }
+        if ($this->status === CollectionItemStatus::ForSale) {
+            throw new ListedCollectionItemCannotBeChanged('Een actief aangeboden kaart kan niet worden gewijzigd.');
         }
     }
 

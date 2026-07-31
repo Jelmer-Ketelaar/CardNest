@@ -56,5 +56,8 @@ services:
     App\Collection\Application\RegisteredCollectionItemsProcessor:
         alias: App\Wishlist\Application\MatchRegisteredCollectionItems
 
+    App\Marketplace\Domain\Repository\ListingRepository:
+        alias: App\Marketplace\Infrastructure\Persistence\DoctrineListingRepository
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

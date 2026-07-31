@@ -1,7 +1,7 @@
 # CardNest API v1
 
 All responses use JSON. Protected endpoints expect `Authorization: Bearer <token>`. Only health checks, registration,
-login, and read-only catalog endpoints are public.
+login, read-only catalog endpoints, and read-only active marketplace listings are public.
 
 Validation errors always return `422` with the shape shown in [Errors](#errors). Ownership is enforced on every
 protected endpoint: trying to read or change a record you don't own behaves exactly like it doesn't exist (`404`),
@@ -74,7 +74,7 @@ individually (condition, purchase, storage, sale status can all diverge later).
 | `language` | string | one of the language codes below |
 | `variant` | string | one of the variant codes below |
 | `condition` | string | one of the condition values below |
-| `status` | string | `in_collection` (default) or `archived` |
+| `status` | string | `in_collection` (default), `for_sale`, or `archived` |
 | `page` / `perPage` | int | same rules as the catalog |
 
 `POST /api/v1/me/collection-items`
@@ -111,7 +111,8 @@ an item only matches a configured maximum price when its purchase price was supp
 `PATCH /api/v1/me/collection-items/{id}` partially updates an item — omitted fields are left untouched. Purchase
 price/date use explicit `clearPurchasePrice` / `clearPurchasedAt` booleans to null them out (combining a clear flag
 with a new value in the same request is a validation error). Changing an archived item returns
-`409 collection_item_archived`.
+`409 collection_item_archived`. A published listing makes its physical item `for_sale`; direct collection updates
+and archiving are then blocked with `409 collection_item_listed` until the listing is cancelled or expires.
 
 `DELETE /api/v1/me/collection-items/{id}` archives the item (soft removal — history is kept, not hard-deleted) and
 returns `204`.
@@ -141,8 +142,8 @@ returns `204`.
 }
 ```
 
-`duplicate.ownedQuantity` counts the caller's own **in-collection** items that share the same card, language and
-variant; `isDuplicate` is simply `ownedQuantity > 1`.
+`duplicate.ownedQuantity` counts the caller's own non-archived items that share the same card, language and variant,
+including `for_sale` items; `isDuplicate` is simply `ownedQuantity > 1`.
 
 ## Physical storage
 
@@ -281,6 +282,89 @@ The response preserves `desiredQuantity` and exposes `fulfilledQuantity`, `remai
 desired quantity. `DELETE /api/v1/me/wishlists/{id}/items/{itemId}` removes one goal and returns the updated wishlist.
 Foreign wishlist and item UUIDs use owner-safe `404` responses.
 
+## Marketplace listings
+
+Public reads expose only active, non-expired listings. Seller writes are protected (`ROLE_USER`) and always resolve
+the physical collection item through its owner; another user's listing or collection item is returned as `404`.
+
+`GET /api/v1/listings` supports these optional filters:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `cardId` / `setId` | UUID | exact catalog card or set |
+| `cardName` / `cardNumber` | string | case-insensitive, partial |
+| `language` | string | card-language code |
+| `variant` | string | catalog variant code |
+| `condition` | string | exact physical-card condition |
+| `minimumPrice` / `maximumPrice` | int ≥ 0 | item price in EUR minor units |
+| `shippingMethod` | string | `letter_mail`, `parcel`, or `pickup` |
+| `pickupAllowed` | boolean | when true, require free pickup; takes precedence over `shippingMethod` |
+| `page` / `perPage` | int | defaults `1` / `24`; maximum page size `100` |
+
+`GET /api/v1/listings/{id}` returns one public active listing. Unknown, draft, cancelled, or time-expired listings
+return `404 listing_not_found`.
+
+`GET /api/v1/me/listings` lists every listing owned by the caller, including drafts and closed states. `GET
+/api/v1/me/listings/{id}` returns one owned listing and includes the private `collectionItemId` that is deliberately
+omitted from public responses.
+
+`POST /api/v1/listings` creates a seller-owned draft:
+
+```json
+{
+  "collectionItemId": "2ff18db6-72d1-4fcf-af48-87f84d4ab4b2",
+  "price": 750,
+  "currency": "EUR",
+  "description": "Clean copy from my collection",
+  "letterMailPrice": 150,
+  "parcelPrice": 595,
+  "pickupAllowed": true,
+  "frontImageUrl": "https://objects.example/listings/front.jpg",
+  "backImageUrl": "https://objects.example/listings/back.jpg",
+  "expiresAt": "2026-08-31T20:00:00+02:00"
+}
+```
+
+The item price and every delivery price are integer minor units; only `EUR` is accepted. At least one delivery
+option is required and pickup always costs zero. Front and back HTTPS references are both mandatory. This endpoint
+stores references suitable for an S3-compatible object-storage adapter; upload signing and binary upload are not
+part of this listing increment. `expiresAt` is optional, ISO 8601, and must be in the future.
+
+`PATCH /api/v1/listings/{id}` changes an owned draft or active listing. Price/currency and front/back photo URLs must
+be supplied as pairs. `clearDescription: true` and `clearExpiration: true` explicitly clear nullable fields. Shipping
+methods are immutable in this API version. Every actual price change appends an immutable price-history entry.
+
+`POST /api/v1/listings/{id}/publish` applies the `publish` workflow transition and changes the physical item from
+`in_collection` to `for_sale`. A PostgreSQL partial unique index ensures that only one blocking listing can be
+published for a physical item, including under concurrent requests. `POST /api/v1/listings/{id}/cancel` cancels an
+owned draft or active listing; cancelling an active listing returns the item to `in_collection`.
+
+When an active listing has `expiresAt`, publishing or changing that date schedules an `ExpireListing` message with
+a Messenger delay. The Redis-backed worker applies the `expire` transition only if the listing is still active and
+actually due, then releases the physical item. Stale and duplicate messages are safe no-ops. Run the worker with the
+Compose `worker` service (included in `docker compose up`) or `php bin/console messenger:consume async` outside
+Compose.
+
+Every shipping method in a listing response contains both its own `price` and the complete `totalPrice`:
+
+```json
+{
+  "price": { "amount": 750, "currency": "EUR" },
+  "shippingMethods": [
+    {
+      "code": "letter_mail",
+      "price": { "amount": 150, "currency": "EUR" },
+      "totalPrice": { "amount": 900, "currency": "EUR" }
+    },
+    {
+      "code": "pickup",
+      "price": { "amount": 0, "currency": "EUR" },
+      "totalPrice": { "amount": 750, "currency": "EUR" }
+    }
+  ]
+}
+```
+
 ## Closed vocabularies
 
 | Concept | Values |
@@ -288,11 +372,14 @@ Foreign wishlist and item UUIDs use owner-safe `404` responses.
 | Card language | `en`, `nl`, `ja`, `ko`, `de`, `fr`, `it`, `es`, `pt`, `zh` |
 | Card condition | `mint`, `near_mint`, `excellent`, `good`, `light_played`, `played`, `poor` |
 | Card variant | `normal`, `holo`, `reverse_holo`, `cosmos_holo`, `stamped`, `promo`, `first_edition`, `unlimited`, `shadowless`, `alternate_art`, `illustration_rare`, `special_illustration_rare`, `gold`, `rainbow`, `master_ball`, `poke_ball`, `other` |
-| Collection item status | `in_collection`, `archived` |
+| Collection item status | `in_collection`, `for_sale`, `archived` |
 | Storage location type | `binder`, `box`, `top_loader_box`, `graded_card_box`, `display`, `safe`, `other` |
 | Binder page side | `front`, `back` |
 | Binder layout strategy | `set_number`, `pokedex_number`, `alphabetical`, `collectible_type`, `rarity`, `value`, `purchase_date`, `custom` |
 | Wishlist priority | `low`, `normal`, `high`, `wanted` |
+| Listing status | `draft`, `pending_review`, `active`, `reserved`, `sold`, `cancelled`, `expired`, `suspended` |
+| Listing image side | `front`, `back` |
+| Listing shipping method | `letter_mail`, `parcel`, `pickup` |
 | Card set status | `announced`, `active`, `out_of_print`, `unknown` |
 
 ## Errors
@@ -323,6 +410,7 @@ Every error response follows the same shape:
 | `catalog_card_unavailable` | 422 | Referenced `catalogCardId` doesn't exist |
 | `card_variant_unavailable` | 422 | Referenced `variantId` doesn't exist or doesn't belong to the card |
 | `collection_item_archived` | 409 | Attempted to change an archived collection item |
+| `collection_item_listed` | 409 | Attempted to change or archive a physical item currently for sale |
 | `storage_location_not_found` | 404 | Location doesn't exist, or isn't owned by the caller |
 | `invalid_storage_hierarchy` | 422 | Parent creates a cycle or belongs to another user |
 | `binder_not_found` | 404 | Binder/slot doesn't exist, or isn't owned by the caller |
@@ -332,5 +420,9 @@ Every error response follows the same shape:
 | `wishlist_not_found` | 404 | Wishlist doesn't exist, or isn't owned by the caller |
 | `wishlist_item_not_found` | 404 | Wishlist item doesn't exist in an owned wishlist |
 | `invalid_wishlist` | 422 | Wishlist or goal violates a domain invariant |
+| `listing_not_found` | 404 | Listing doesn't exist, isn't public, or isn't owned by the caller |
+| `listing_already_exists` | 409 | Physical item already has a blocking listing |
+| `invalid_listing_transition` | 409 | Listing workflow does not allow the requested action |
+| `invalid_listing` | 422 | Price, expiration, photos, shipping, or physical-item state violates a listing rule |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

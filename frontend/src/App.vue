@@ -7,7 +7,7 @@ import { useAuthStore } from './stores/auth'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const showNavigation = computed(() => Boolean(route.meta.requiresAuth))
+const showShell = computed(() => !['login', 'register'].includes(String(route.name)))
 
 async function logout(): Promise<void> {
   await auth.logout()
@@ -16,17 +16,22 @@ async function logout(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="showNavigation" class="app-shell">
+  <div v-if="showShell" class="app-shell">
     <header class="site-header">
-      <RouterLink class="brand" :to="{ name: 'dashboard' }">CardNest</RouterLink>
+      <RouterLink class="brand" :to="{ name: auth.isAuthenticated ? 'dashboard' : 'marketplace' }">CardNest</RouterLink>
       <nav aria-label="Hoofdnavigatie">
-        <RouterLink :to="{ name: 'dashboard' }">Dashboard</RouterLink>
-        <RouterLink :to="{ name: 'collection' }">Collectie</RouterLink>
-        <RouterLink :to="{ name: 'storage' }">Opslag</RouterLink>
-        <RouterLink :to="{ name: 'binders' }">Binders</RouterLink>
-        <RouterLink :to="{ name: 'wishlists' }">Wishlists</RouterLink>
+        <RouterLink :to="{ name: 'marketplace' }">Marktplaats</RouterLink>
+        <template v-if="auth.isAuthenticated">
+          <RouterLink :to="{ name: 'dashboard' }">Dashboard</RouterLink>
+          <RouterLink :to="{ name: 'collection' }">Collectie</RouterLink>
+          <RouterLink :to="{ name: 'storage' }">Opslag</RouterLink>
+          <RouterLink :to="{ name: 'binders' }">Binders</RouterLink>
+          <RouterLink :to="{ name: 'wishlists' }">Wishlists</RouterLink>
+          <RouterLink :to="{ name: 'my-listings' }">Mijn verkoop</RouterLink>
+        </template>
       </nav>
-      <BaseButton variant="secondary" @click="logout">Uitloggen</BaseButton>
+      <BaseButton v-if="auth.isAuthenticated" variant="secondary" @click="logout">Uitloggen</BaseButton>
+      <RouterLink v-else class="button button--secondary" :to="{ name: 'login' }">Inloggen</RouterLink>
     </header>
     <RouterView />
   </div>

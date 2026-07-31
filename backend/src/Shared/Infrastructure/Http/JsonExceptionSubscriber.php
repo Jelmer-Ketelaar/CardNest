@@ -14,8 +14,13 @@ use App\Collection\Application\Exception\CatalogCardUnavailable;
 use App\Collection\Application\Exception\CollectionItemNotFound;
 use App\Collection\Domain\Exception\ArchivedCollectionItemCannotBeChanged;
 use App\Collection\Domain\Exception\CardVariantDoesNotBelongToCard;
+use App\Collection\Domain\Exception\ListedCollectionItemCannotBeChanged;
 use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\InvalidCredentials;
+use App\Marketplace\Application\Exception\ListingNotFound;
+use App\Marketplace\Domain\Exception\InvalidListing;
+use App\Marketplace\Domain\Exception\InvalidListingTransition;
+use App\Marketplace\Domain\Exception\ListingAlreadyExists;
 use App\Storage\Application\Exception\StorageLocationNotFound;
 use App\Storage\Domain\Exception\InvalidStorageHierarchy;
 use App\Storage\Domain\Exception\InvalidStorageTarget;
@@ -57,6 +62,7 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof CardVariantUnavailable,
             $exception instanceof CardVariantDoesNotBelongToCard => [422, 'card_variant_unavailable', $exception->getMessage()],
             $exception instanceof ArchivedCollectionItemCannotBeChanged => [409, 'collection_item_archived', $exception->getMessage()],
+            $exception instanceof ListedCollectionItemCannotBeChanged => [409, 'collection_item_listed', $exception->getMessage()],
             $exception instanceof StorageLocationNotFound => [404, 'storage_location_not_found', $exception->getMessage()],
             $exception instanceof InvalidStorageHierarchy,
             $exception instanceof InvalidStorageTarget,
@@ -72,6 +78,10 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof WishlistVariantUnavailable => [422, 'card_variant_unavailable', $exception->getMessage()],
             $exception instanceof InvalidWishlist,
             $exception instanceof InvalidWishlistItem => [422, 'invalid_wishlist', $exception->getMessage()],
+            $exception instanceof ListingNotFound => [404, 'listing_not_found', $exception->getMessage()],
+            $exception instanceof ListingAlreadyExists => [409, 'listing_already_exists', $exception->getMessage()],
+            $exception instanceof InvalidListingTransition => [409, 'invalid_listing_transition', $exception->getMessage()],
+            $exception instanceof InvalidListing => [422, 'invalid_listing', $exception->getMessage()],
             $exception instanceof HttpExceptionInterface => [$exception->getStatusCode(), 'request_failed', $exception->getMessage()],
             default => [500, 'internal_error', 'Er is een onverwachte fout opgetreden.'],
         };

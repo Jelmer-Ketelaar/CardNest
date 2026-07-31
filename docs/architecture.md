@@ -11,6 +11,7 @@ flowchart TD
     Collector[Collector]
     SPA[Vue 3 SPA]
     API[Symfony JSON API]
+    Worker[Symfony Messenger worker]
     Postgres[(PostgreSQL)]
     Redis[(Redis)]
     Mail[Async mail / notifications]
@@ -18,8 +19,10 @@ flowchart TD
     Collector --> SPA
     SPA -->|"fetch, Bearer token"| API
     API --> Postgres
-    API -->|cache, queue| Redis
-    API -->|Symfony Messenger| Mail
+    API -->|cache, dispatch| Redis
+    Redis -->|consume due messages| Worker
+    Worker --> Postgres
+    Worker --> Mail
 ```
 
 The frontend never talks to Postgres or Redis directly, and it never encodes a business rule — it calls the API and
@@ -46,8 +49,8 @@ flowchart TD
   *interfaces*, never their implementation, plus enums for closed vocabularies (e.g. `VariantCode`, `CardCondition`)
   and small value objects (e.g. `Money`).
 - **Application** contains one class per use case (`CreateCollectionItems`, `ArchiveCollectionItem`, ...) plus the
-  request/response DTOs for that module. It depends only on `Domain` interfaces, never on `Infrastructure` classes
-  directly.
+  request/response DTOs for that module. It depends on `Domain` interfaces and injected Symfony abstractions such as
+  Messenger or Workflow, never on a module's concrete `Infrastructure` classes directly.
 - **Infrastructure** implements those interfaces with Doctrine (`DoctrineCollectionItemRepository`, ...) and holds
   anything else that talks to the outside world (fixtures, future import adapters, mail senders).
 - **Presentation** is thin HTTP controllers: map the request to a DTO, call one Application service, return its
@@ -67,6 +70,7 @@ flowchart TD
     Storage[Storage: hierarchy and placement history]
     Binder[Binder: visual pages and slots]
     Wishlist[Wishlist: wanted cards and progress]
+    Marketplace[Marketplace: fixed-price listings]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -80,6 +84,9 @@ flowchart TD
     Wishlist --> Collection
     Wishlist --> Catalog
     Wishlist --> Identity
+    Marketplace --> Collection
+    Marketplace --> Identity
+    Marketplace --> Shared
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
@@ -93,10 +100,11 @@ flowchart TD
 | `Storage` | `storage_locations`, `collection_item_location_history` | `Collection` (physical item), `Identity` (owner) |
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
 | `Wishlist` | `wishlists`, `wishlist_items` | `Catalog` (wanted card/variant), `Collection` (matching physical items), `Identity` (owner), `Shared` (`Money`) |
+| `Marketplace` | `listings`, `listing_images`, `listing_shipping_methods`, `listing_price_history` | `Collection` (physical item), `Identity` (seller), `Shared` (`Money`) |
 | `Shared` | cross-cutting value objects and the API exception handler | — |
 
-Planned modules (`Marketplace`, `Order`, `Payment`, `Shipping`, `Review`, `Notification`, `Pricing`, `Moderation`,
-`Reporting`) will slot in the same way, each adding one more layer of dependency on
+Planned modules (`Order`, `Payment`, `Shipping`, `Review`, `Notification`, `Pricing`, `Moderation`, `Reporting`)
+will slot in the same way, each adding one more layer of dependency on
 `Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
 
 `App\Shared\Infrastructure\Http\JsonExceptionSubscriber` is the one place that turns a thrown domain/application
@@ -135,6 +143,33 @@ resolve `catalogCardId`/`variantId` before creating any `CollectionItem`, and re
 either doesn't exist. This is also why `quantity: 3` results in three rows in the sequence above instead of one row
 with a counter: the same physical card can later be split across a sale, a binder slot, and a wishlist match, each
 of which only makes sense per individual copy.
+
+## Example flow: publishing and expiring a listing
+
+```mermaid
+sequenceDiagram
+    participant Seller
+    participant API as Marketplace API
+    participant Workflow as Listing workflow
+    participant DB as PostgreSQL
+    participant Queue as Redis / Messenger
+    participant Worker
+
+    Seller->>API: POST /listings/{id}/publish
+    API->>Workflow: apply publish
+    Workflow-->>API: listing active
+    API->>DB: listing active + item for_sale
+    API->>Queue: delayed ExpireListing(id)
+    API-->>Seller: active listing DTO
+    Queue->>Worker: deliver at expiresAt
+    Worker->>DB: load listing
+    Worker->>Workflow: apply expire if still active and due
+    Worker->>DB: listing expired + item in_collection
+```
+
+The database partial unique index is the final guard against two blocking listings for one physical card. Delayed
+expiration messages intentionally contain only the listing UUID: the handler reloads current state and is therefore
+safe when a seller cancels, clears or changes the expiration, or when a message is delivered twice.
 
 ## Data conventions that hold across every module
 

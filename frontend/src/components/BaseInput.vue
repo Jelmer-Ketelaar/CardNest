@@ -3,7 +3,7 @@ defineProps<{
   id: string
   label: string
   modelValue: string
-  type?: 'text' | 'email' | 'password' | 'search' | 'number' | 'date'
+  type?: 'text' | 'email' | 'password' | 'search' | 'number' | 'date' | 'datetime-local' | 'url'
   autocomplete?: string
   error?: string
   min?: string | number

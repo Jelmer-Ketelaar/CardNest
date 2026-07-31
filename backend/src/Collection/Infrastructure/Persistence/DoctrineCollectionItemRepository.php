@@ -15,6 +15,7 @@ use App\Collection\Domain\Repository\CollectionItemSearchCriteria;
 use App\Collection\Domain\Repository\CollectionItemSearchResult;
 use App\Identity\Domain\Entity\User;
 use App\Shared\Domain\ValueObject\Money;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -97,14 +98,17 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
                        variant_id::text AS variant_id,
                        COUNT(*) AS item_count
                 FROM collection_items
-                WHERE owner_id = :owner_id AND status = :status
+                WHERE owner_id = :owner_id AND status IN (:statuses)
                 GROUP BY catalog_card_id, language, variant_id
                 SQL,
             [
                 'owner_id' => $owner->getId()->toRfc4122(),
-                'status' => CollectionItemStatus::InCollection->value,
+                'statuses' => [
+                    CollectionItemStatus::InCollection->value,
+                    CollectionItemStatus::ForSale->value,
+                ],
             ],
-            ['owner_id' => ParameterType::STRING, 'status' => ParameterType::STRING],
+            ['owner_id' => ParameterType::STRING, 'statuses' => ArrayParameterType::STRING],
         );
 
         $counts = [];
@@ -129,10 +133,10 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
             ->from(CollectionItem::class, 'i')
             ->where('i.owner = :owner')
             ->andWhere('i.catalogCard = :card')
-            ->andWhere('i.status = :status')
+            ->andWhere('i.status IN (:statuses)')
             ->setParameter('owner', $owner)
             ->setParameter('card', $card)
-            ->setParameter('status', CollectionItemStatus::InCollection);
+            ->setParameter('statuses', [CollectionItemStatus::InCollection, CollectionItemStatus::ForSale]);
 
         if ($language instanceof CardLanguage) {
             $query->andWhere('i.language = :language')->setParameter('language', $language);

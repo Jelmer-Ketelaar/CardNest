@@ -1,0 +1,47 @@
+framework:
+    workflows:
+        marketplace_listing:
+            type: state_machine
+            marking_store:
+                type: method
+                property: workflowStatus
+            supports:
+                - App\Marketplace\Domain\Entity\Listing
+            initial_marking: draft
+            places:
+                - draft
+                - pending_review
+                - active
+                - reserved
+                - sold
+                - cancelled
+                - expired
+                - suspended
+            transitions:
+                submit_review:
+                    from: draft
+                    to: pending_review
+                publish:
+                    from: draft
+                    to: active
+                approve:
+                    from: pending_review
+                    to: active
+                reserve:
+                    from: active
+                    to: reserved
+                release:
+                    from: reserved
+                    to: active
+                sell:
+                    from: reserved
+                    to: sold
+                cancel:
+                    from: [draft, active]
+                    to: cancelled
+                expire:
+                    from: active
+                    to: expired
+                suspend:
+                    from: [pending_review, active]
+                    to: suspended

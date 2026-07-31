@@ -47,6 +47,25 @@ services:
     depends_on:
       - backend
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    working_dir: /app
+    command: php bin/console messenger:consume async --time-limit=3600 --memory-limit=128M --no-interaction
+    environment:
+      APP_SECRET: ${APP_SECRET:-dev-secret-change-me}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cardnest:cardnest@postgres:5432/cardnest?serverVersion=16&charset=utf8}
+      MESSENGER_TRANSPORT_DSN: ${REDIS_URL:-redis://redis:6379}/messages
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     environment:

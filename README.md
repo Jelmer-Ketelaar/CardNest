@@ -62,8 +62,8 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Search and page through your own collection, filtered by card, set, name, number, language, variant, condition or
   status
 - Update any detail later, or archive a card (a soft removal that keeps its history instead of deleting it)
-- Automatic duplicate detection: every item reports how many of your **in-collection** copies share the same card,
-  language and variant
+- Automatic duplicate detection: every item reports how many of your non-archived copies share the same card,
+  language and variant, including copies currently offered for sale
 - Strict ownership checks: your collection is only ever visible to you, and a wrong or foreign id behaves exactly
   like it doesn't exist
 - On the frontend, a full "My collection" page ties this together: search the catalog, add a card with all its
@@ -101,17 +101,33 @@ CardNest is implemented incrementally, one module at a time. This is the current
   retaining the original target quantity and completion timestamp
 - Remove individual goals without affecting the catalog card or any physical collection item
 
+### Marketplace listings (Marketplace module)
+
+- Create a fixed-price draft directly from one owned physical `CollectionItem`; catalog, variant, language and
+  condition data are reused instead of entered again
+- Require an HTTPS front and back photo reference plus at least one Dutch/Belgian MVP delivery option: letter mail,
+  parcel or free pickup. Direct S3-compatible uploads are a separate upcoming storage increment
+- Publish and cancel through a Symfony Workflow state machine. Publishing marks the physical item `for_sale`, while
+  cancellation or expiration returns it to `in_collection`
+- Enforce one blocking listing per physical item in PostgreSQL, even when concurrent requests race
+- Search active public listings by card, set, number, language, variant, condition, price and delivery option;
+  every option exposes item price, delivery price and the complete total up front
+- Keep an immutable price history and seller-only physical-item reference without exposing that private identifier
+  in public responses
+- Schedule optional expiration through Redis-backed Symfony Messenger; an idempotent worker closes the listing and
+  releases its physical card when the end time arrives
+
 ### Frontend
 
-- Vue 3 + TypeScript single-page app: registration, login, dashboard, collection, storage, visual binder, and
-  wishlist pages behind a route guard
+- Vue 3 + TypeScript single-page app: a public marketplace plus authenticated registration, login, dashboard,
+  collection, storage, visual binder, wishlist and seller-listing pages
 - A small hand-rolled component layer (button, input, error message) instead of a full UI kit
 - A typed API client with structured error handling, a Pinia store for authentication state, and small utilities
   (e.g. money formatting for minor-unit amounts)
 
 ### Platform
 
-- Dockerized backend (PHP / Symfony), frontend, PostgreSQL, and Redis
+- Dockerized backend (PHP / Symfony), frontend, PostgreSQL, Redis, and a Messenger worker
 - A `/api/v1/health` endpoint for uptime checks
 - Structured JSON error responses (`{"error": {"code", "message", "details"}}`) across the whole API
 - Continuous integration that runs the backend and frontend test suites on every push
@@ -123,8 +139,8 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Marketplace, Order & Payment** — listings, shopping cart and checkout, temporary stock reservations, a fake
-  payment provider for development, and the full order lifecycle
+- **Cart, Order & Payment** — shopping cart and checkout, temporary stock reservations, a fake payment provider for
+  development, and the full order lifecycle
 - **Shipping, Review, Notification, Pricing, Moderation, Reporting** — supporting modules around the above
   (shipment tracking, buyer/seller reviews, price history, fraud signals, financial reporting, ...)
 
@@ -169,6 +185,7 @@ flowchart TD
     Storage[Storage: hierarchy and location history]
     Binder[Binder: visual pages, slots, placeholders]
     Wishlist[Wishlist: wanted cards and fulfillment]
+    Marketplace[Marketplace: fixed-price listings]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -182,20 +199,23 @@ flowchart TD
     Wishlist --> Collection
     Wishlist --> Catalog
     Wishlist --> Identity
+    Marketplace --> Collection
+    Marketplace --> Identity
+    Marketplace --> Shared
     Catalog --> Shared
     Collection --> Shared
     Identity --> Shared
 ```
 
-Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Shared`. Planned
-modules follow the same shape (see "What's not built yet" above). For a deeper walkthrough — including a
+Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Marketplace`,
+`Shared`. Planned modules follow the same shape (see "What's not built yet" above). For a deeper walkthrough — including a
 request-sequence diagram and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
 
 ## Tech stack
 
 | Layer | Choice |
 | --- | --- |
-| Backend | PHP 8.4, Symfony 7.4 (LTS), Doctrine ORM, Symfony Messenger/Security/Validator |
+| Backend | PHP 8.4, Symfony 7.4 (LTS), Doctrine ORM, Symfony Messenger/Security/Validator/Workflow |
 | Frontend | Vue 3 (Composition API, `<script setup>`), TypeScript (strict mode), Vite, Vue Router, Pinia |
 | Database | PostgreSQL — relational columns for filterable/sortable data, `jsonb` only for source-specific metadata |
 | Cache & queue | Redis, via Symfony Messenger |
@@ -211,6 +231,37 @@ cardnest/
   docker/      Dockerfiles for the backend and frontend images
   docs/        API contract and architecture reference
   compose.yaml Local multi-service Docker Compose stack
+```
+
+## Run locally
+
+Requirements: Docker Engine with Docker Compose. PHP, Composer, Node.js, PostgreSQL, and Redis do not need to be
+installed on the host.
+
+```bash
+cp .env.example .env
+docker compose build
+docker compose run --rm --no-deps backend composer install
+docker compose up
+```
+
+The frontend is then available at <http://localhost:5174> and the API at <http://localhost:8080/api/v1>. The backend
+container applies outstanding migrations on startup; the `worker` container consumes e-mail and delayed listing
+expiration messages. To load the optional twenty-card development catalog into an empty database:
+
+```bash
+docker compose exec backend php bin/console doctrine:fixtures:load --no-interaction
+```
+
+Run the main quality checks with:
+
+```bash
+docker compose exec backend vendor/bin/phpunit
+docker compose exec backend vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+docker compose exec backend vendor/bin/php-cs-fixer fix --dry-run --diff
+docker compose exec frontend npm test
+docker compose exec frontend npm run build
+docker compose exec frontend npm run test:e2e
 ```
 
 ## Learn more

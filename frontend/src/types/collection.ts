@@ -22,7 +22,7 @@ export interface CollectionItem {
     code: string
   }
   condition: string
-  status: 'in_collection' | 'archived'
+  status: 'in_collection' | 'for_sale' | 'archived'
   purchase: {
     price: Money | null
     purchasedAt: string | null

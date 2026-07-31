@@ -295,6 +295,37 @@ progress { width: 100%; height: .65rem; accent-color: #286440; }
 .wishlist-card dt { color: #617066; font-size: .7rem; text-transform: uppercase; }
 .wishlist-card dd { margin: .1rem 0 0; overflow: hidden; text-overflow: ellipsis; }
 
+.marketplace-heading { align-items: end; }
+.marketplace-filters { display: grid; gap: .8rem; align-items: end; }
+.marketplace-pickup { align-self: center; margin: 0 0 .8rem; }
+.results-summary { color: #617066; font-weight: 700; }
+.listing-grid { display: grid; gap: 1rem; }
+.listing-card { overflow: hidden; border: 1px solid #d4dfd5; border-radius: .85rem; background: #fff; box-shadow: 0 .35rem 1rem rgba(31, 51, 37, .06); }
+.listing-card > img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #edf2ee; }
+.listing-card__body { display: grid; gap: .55rem; padding: 1rem; }
+.listing-card__body h2 { margin: 0; }
+.listing-card__body h2 small { color: #617066; font-size: .7em; }
+.listing-card__body > p:not(.eyebrow) { margin: 0; color: #617066; }
+.listing-price { display: grid; gap: .1rem; }
+.listing-price strong { color: #1f5736; font-size: 1.35rem; }
+.listing-price span { color: #617066; font-size: .78rem; }
+.listing-detail { width: min(52rem, 100%); }
+.listing-detail__photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.listing-detail__photos img { width: 100%; max-height: 22rem; object-fit: contain; border-radius: .5rem; background: #edf2ee; }
+.shipping-totals { display: grid; gap: .5rem; padding: 0; list-style: none; }
+.shipping-totals li { display: grid; grid-template-columns: 1fr auto; gap: .15rem 1rem; padding: .7rem; border-radius: .5rem; background: #f2f7f3; }
+.shipping-totals li span:nth-child(2) { color: #617066; }
+.shipping-totals strong { grid-column: 1 / -1; color: #1f5736; }
+.seller-workspace { display: grid; align-items: start; gap: 1.5rem; }
+.listing-form { width: 100%; }
+.form-help { color: #617066; font-size: .78rem; }
+.seller-listings { min-width: 0; }
+.seller-listing-card { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: .9rem; margin-bottom: .7rem; padding: .8rem; border: 1px solid #d4dfd5; border-radius: .7rem; background: #fff; }
+.seller-listing-card > img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .35rem; background: #edf2ee; }
+.seller-listing-card h3 { margin: .3rem 0; }
+.seller-listing-card p { margin: 0 0 .35rem; color: #617066; }
+.seller-listing-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: .5rem; }
+
 @media (min-width: 44rem) {
   .site-header { grid-template-columns: auto 1fr auto; }
   .site-header nav { grid-column: auto; justify-self: center; order: initial; }
@@ -317,4 +348,9 @@ progress { width: 100%; height: .65rem; accent-color: #286440; }
   .wishlist-title-row { grid-template-columns: 1fr minmax(12rem, 20rem); align-items: end; }
   .wishlist-settings { grid-template-columns: minmax(12rem, 1fr) auto auto; align-items: end; }
   .wishlist-item-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .marketplace-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .listing-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .seller-workspace { grid-template-columns: minmax(18rem, 25rem) minmax(0, 1fr); }
+  .seller-listing-card { grid-template-columns: 6rem minmax(0, 1fr) auto; align-items: center; }
+  .seller-listing-actions { grid-column: auto; }
 }
