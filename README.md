@@ -36,9 +36,11 @@ docker compose run --rm backend vendor/bin/phpstan analyse --no-progress --memor
 docker compose run --rm backend vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes
 docker compose run --rm --no-deps frontend npm test
 docker compose run --rm --no-deps frontend npm run build
-docker compose run --rm --no-deps frontend npx playwright install chromium
 docker compose run --rm --no-deps frontend npm run test:e2e
 ```
+
+The frontend image includes Chromium and its operating-system dependencies for Playwright. Rebuild the image after
+changing the Playwright version in `frontend/package.json`.
 
 See [docs/api.md](docs/api.md) for the current HTTP contract.
 
