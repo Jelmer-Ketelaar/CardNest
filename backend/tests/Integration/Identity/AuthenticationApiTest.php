@@ -1,0 +1,102 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Integration\Identity;
+
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Uid\Uuid;
+
+final class AuthenticationApiTest extends WebTestCase
+{
+    private KernelBrowser $client;
+
+    protected function setUp(): void
+    {
+        $this->client = self::createClient();
+    }
+
+    public function testVisitorCanRegisterLoginAndLogout(): void
+    {
+        // Arrange
+        $email = sprintf('collector-%s@example.com', Uuid::v7()->toRfc4122());
+        $password = 'A-strong-password-123';
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => $email,
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(201);
+        $registration = $this->responseData();
+        self::assertSame($email, $registration['user']['email'] ?? null);
+        self::assertSame(['ROLE_USER'], $registration['user']['roles'] ?? null);
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/auth/login', ['email' => $email, 'password' => $password]);
+        $login = json_decode((string) $this->client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertIsString($login['token'] ?? null);
+
+        // Act
+        $this->client->request('POST', '/api/v1/auth/logout', server: [
+            'HTTP_AUTHORIZATION' => 'Bearer '.$login['token'],
+            'HTTP_ACCEPT' => 'application/json',
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(204);
+    }
+
+    public function testInvalidRegistrationReturnsStructuredValidationErrors(): void
+    {
+        // Arrange
+        $payload = ['email' => 'invalid', 'password' => 'short', 'passwordConfirmation' => 'different'];
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/auth/register', $payload);
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testProtectedEndpointReturnsStructuredAuthenticationError(): void
+    {
+        // Arrange
+        $headers = ['HTTP_ACCEPT' => 'application/json'];
+
+        // Act
+        $this->client->request('POST', '/api/v1/auth/logout', server: $headers);
+
+        // Assert
+        self::assertResponseStatusCodeSame(401);
+        self::assertSame('authentication_required', $this->responseData()['error']['code'] ?? null);
+    }
+
+    /** @param array<string, string> $payload */
+    private function jsonRequest(string $method, string $uri, array $payload): void
+    {
+        $this->client->request(
+            $method,
+            $uri,
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: json_encode($payload, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function responseData(): array
+    {
+        $data = json_decode((string) $this->client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($data);
+
+        return $data;
+    }
+}

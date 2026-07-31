@@ -1,0 +1,20 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #16231b; background: #edf3ed; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+a { color: #286440; }
+.auth-page, .dashboard { min-height: 100vh; padding: 2rem 1rem; }
+.auth-page { display: grid; place-items: center; }
+.panel { width: min(100%, 30rem); padding: 2rem; border: 1px solid #d4dfd5; border-radius: 1rem; background: #fff; box-shadow: 0 1rem 3rem rgba(22, 35, 27, .08); }
+.panel h1 { margin-top: 0; font-size: clamp(2rem, 8vw, 3rem); line-height: 1; }
+.eyebrow { color: #3f7651; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; }
+.field { display: grid; gap: .4rem; margin: 1rem 0; font-weight: 600; }
+.field input { width: 100%; padding: .8rem; border: 1px solid #a9b9ad; border-radius: .55rem; font: inherit; }
+.field input:focus { outline: 3px solid #b8d8c2; border-color: #286440; }
+.field-error, .error-message { color: #a32626; }
+.field-error { font-size: .85rem; }
+.error-message { padding: .75rem; background: #fff0f0; border-radius: .5rem; }
+.button { padding: .8rem 1.1rem; border: 0; border-radius: .55rem; background: #286440; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.button:disabled { opacity: .55; cursor: wait; }
+form .button { width: 100%; margin: .5rem 0 1rem; }
+.dashboard nav { max-width: 70rem; margin: 0 auto 4rem; display: flex; justify-content: space-between; align-items: center; }
+.dashboard .panel { margin: auto; width: min(100%, 70rem); }

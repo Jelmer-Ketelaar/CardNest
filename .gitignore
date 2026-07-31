@@ -1,0 +1,10 @@
+.env
+.phpunit.result.cache
+backend/.php-cs-fixer.cache
+backend/.env.local
+backend/var/
+backend/vendor/
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
