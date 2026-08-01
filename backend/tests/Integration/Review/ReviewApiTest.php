@@ -218,7 +218,7 @@ final class ReviewApiTest extends WebTestCase
         $listing->setWorkflowStatus('reserved');
         $item->markForSale();
         $payment = new Payment($this->buyer, new Money(900, 'EUR'), 'fake');
-        $payment->recordResult(PaymentResult::succeeded('review-'.$suffix));
+        $payment->recordResult(PaymentResult::succeeded(new Money(900, 'EUR'), 'review-'.$suffix));
         $order = new Order(
             $this->buyer,
             $this->seller,
