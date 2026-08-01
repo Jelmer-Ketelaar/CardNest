@@ -34,7 +34,7 @@ jobs:
     env:
       APP_ENV: test
       APP_SECRET: ci-secret
-      DATABASE_URL: postgresql://cardnest:cardnest@127.0.0.1:5432/cardnest_test?serverVersion=16&charset=utf8
+      DATABASE_URL: postgresql://cardnest:cardnest@127.0.0.1:5432/cardnest?serverVersion=16&charset=utf8
       MESSENGER_TRANSPORT_DSN: in-memory://
     steps:
       - uses: actions/checkout@v4
