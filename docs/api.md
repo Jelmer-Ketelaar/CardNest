@@ -31,6 +31,20 @@ rate-limited (5/minute) per normalized e-mail + client IP; exceeding it returns 
 
 `POST /api/v1/auth/logout` revokes the current bearer token and returns `204`.
 
+`POST /api/v1/auth/forgot-password` accepts an e-mail address and always returns `202` for a valid request,
+regardless of whether an account exists. This prevents account enumeration. For an existing account, CardNest stores
+only a hash of a single-use reset token that expires after one hour and queues a reset message. The endpoint is
+rate-limited to three requests per hour per normalized e-mail and IP address. It never returns or logs the plaintext
+reset token.
+
+```json
+{ "email": "collector@example.com" }
+```
+
+Malformed e-mail input returns the standard `422` validation response. Submitting a new request for the same account
+invalidates its previous reset token. Resetting the password with a token is documented separately when the
+confirmation endpoint is introduced.
+
 `GET /api/v1/me` requires a bearer token and returns the authenticated user's safe profile data:
 
 ```json

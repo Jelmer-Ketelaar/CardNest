@@ -13,6 +13,10 @@ framework:
             policy: token_bucket
             limit: 3
             rate: { interval: '1 hour', amount: 3 }
+        password_reset:
+            policy: token_bucket
+            limit: 3
+            rate: { interval: '1 hour', amount: 3 }
 
     #esi: true
     #fragments: true
