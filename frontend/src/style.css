@@ -189,6 +189,7 @@ h1, h2, p { overflow-wrap: anywhere; }
   background: #f5f9f6;
 }
 .storage-list li > div { min-width: 0; display: grid; gap: .2rem; }
+.storage-list li > .row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
 .storage-list span, .storage-list small { color: #617066; }
 .storage-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -233,18 +234,27 @@ h1, h2, p { overflow-wrap: anywhere; }
   position: relative;
   min-width: 0;
   aspect-ratio: 2.5 / 3.5;
-  display: grid;
-  place-items: center;
   overflow: hidden;
-  padding: .4rem;
   border: 1px solid rgba(255, 255, 255, .35);
   border-radius: .55rem;
   color: #d7e3da;
   background: linear-gradient(145deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .03));
+}
+.binder-slot__action {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: .4rem;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
   text-align: center;
   cursor: pointer;
 }
-.binder-slot:focus { outline: 3px solid #ffd779; outline-offset: 2px; }
+.binder-slot__action:focus { outline: 3px solid #ffd779; outline-offset: -3px; }
+.binder-slot__action:disabled { cursor: wait; opacity: .7; }
 .binder-slot--selected-target { border-color: #ffd779; background: rgba(255, 215, 121, .14); }
 .slot-number { position: absolute; z-index: 2; top: .3rem; left: .4rem; color: rgba(255, 255, 255, .62); font-size: .7rem; }
 .slot-card, .slot-placeholder { width: 100%; height: 100%; display: grid; place-items: center; align-content: center; gap: .25rem; overflow: hidden; }

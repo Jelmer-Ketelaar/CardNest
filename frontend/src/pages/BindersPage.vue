@@ -57,6 +57,21 @@ function readableCode(value: string): string {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+function slotLabel(slot: BinderSlot): string {
+  const prefix = `Vak ${slot.position}`
+  if (slot.collectionItem) {
+    return `${prefix}, gevuld met ${slot.collectionItem.card.name} ${slot.collectionItem.card.number}`
+  }
+  if (slot.placeholder?.catalogCard) {
+    return `${prefix}, gereserveerd voor ${slot.placeholder.catalogCard.name} ${slot.placeholder.catalogCard.number}`
+  }
+  if (slot.placeholder?.label) {
+    return `${prefix}, placeholder ${slot.placeholder.label}`
+  }
+
+  return `${prefix}, leeg`
+}
+
 function syncBinderSummary(binder: BinderDetail): void {
   const index = binders.value.findIndex((candidate) => candidate.id === binder.id)
   if (index >= 0) binders.value[index] = binder
@@ -150,7 +165,15 @@ async function dropOnSlot(event: DragEvent, slot: BinderSlot): Promise<void> {
   if (itemId) await assignToSlot(slot, itemId)
 }
 
+function requestSlotDrop(event: DragEvent, slot: BinderSlot): void {
+  if (saving.value) return
+
+  void dropOnSlot(event, slot)
+}
+
 async function activateSlot(slot: BinderSlot): Promise<void> {
+  if (saving.value) return
+
   if (selectedItemId.value) {
     await assignToSlot(slot, selectedItemId.value)
     return
@@ -162,9 +185,15 @@ async function activateSlot(slot: BinderSlot): Promise<void> {
   placeholderMatches.value = []
 }
 
+function requestSlotActivation(slot: BinderSlot): void {
+  if (saving.value) return
+
+  void activateSlot(slot)
+}
+
 async function assignToSlot(slot: BinderSlot, itemId: string): Promise<void> {
   const binder = activeBinder.value
-  if (!binder) return
+  if (!binder || saving.value) return
 
   error.value = ''
   success.value = ''
@@ -187,7 +216,7 @@ async function assignToSlot(slot: BinderSlot, itemId: string): Promise<void> {
 
 async function removeAssignment(slot: BinderSlot): Promise<void> {
   const binder = activeBinder.value
-  if (!binder) return
+  if (!binder || saving.value) return
 
   error.value = ''
   saving.value = true
@@ -334,36 +363,47 @@ onMounted(() => { void loadOverview() })
             v-for="slot in activePage.slots"
             :key="slot.id"
             class="binder-slot"
-            role="button"
-            tabindex="0"
             :class="{ 'binder-slot--selected-target': selectedItemId && !slot.collectionItem }"
             @dragover.prevent
-            @drop.prevent="dropOnSlot($event, slot)"
-            @click="activateSlot(slot)"
-            @keydown.enter.prevent="activateSlot(slot)"
-            @keydown.space.prevent="activateSlot(slot)"
+            @drop.prevent="requestSlotDrop($event, slot)"
           >
-            <span class="slot-number">{{ slot.position }}</span>
-            <template v-if="slot.collectionItem">
-              <span
-                class="slot-card"
-                draggable="true"
-                @dragstart.stop="startDrag($event, slot.collectionItem.id)"
-              >
-                <img v-if="slot.collectionItem.card.thumbnailUrl" :src="slot.collectionItem.card.thumbnailUrl" alt="">
-                <strong>{{ slot.collectionItem.card.name }}</strong>
-                <small>{{ slot.collectionItem.card.number }} · {{ readableCode(slot.collectionItem.variant) }}</small>
-              </span>
-              <button type="button" class="slot-remove" @click.stop="removeAssignment(slot)">Uit vak</button>
-            </template>
-            <template v-else-if="slot.placeholder">
-              <span class="slot-placeholder">
-                <strong>{{ slot.placeholder.catalogCard?.name ?? slot.placeholder.label }}</strong>
-                <small v-if="slot.placeholder.catalogCard">{{ slot.placeholder.catalogCard.number }} · ontbreekt</small>
-                <small v-else>Placeholder</small>
-              </span>
-            </template>
-            <span v-else class="slot-empty">Leeg vak</span>
+            <button
+              type="button"
+              class="binder-slot__action"
+              :aria-label="slotLabel(slot)"
+              :disabled="saving"
+              @click="requestSlotActivation(slot)"
+            >
+              <span class="slot-number">{{ slot.position }}</span>
+              <template v-if="slot.collectionItem">
+                <span
+                  class="slot-card"
+                  :draggable="!saving"
+                  @dragstart.stop="startDrag($event, slot.collectionItem.id)"
+                >
+                  <img v-if="slot.collectionItem.card.thumbnailUrl" :src="slot.collectionItem.card.thumbnailUrl" alt="">
+                  <strong>{{ slot.collectionItem.card.name }}</strong>
+                  <small>{{ slot.collectionItem.card.number }} · {{ readableCode(slot.collectionItem.variant) }}</small>
+                </span>
+              </template>
+              <template v-else-if="slot.placeholder">
+                <span class="slot-placeholder">
+                  <strong>{{ slot.placeholder.catalogCard?.name ?? slot.placeholder.label }}</strong>
+                  <small v-if="slot.placeholder.catalogCard">{{ slot.placeholder.catalogCard.number }} · ontbreekt</small>
+                  <small v-else>Placeholder</small>
+                </span>
+              </template>
+              <span v-else class="slot-empty">Leeg vak</span>
+            </button>
+            <button
+              v-if="slot.collectionItem"
+              type="button"
+              class="slot-remove"
+              :disabled="saving"
+              @click="removeAssignment(slot)"
+            >
+              Uit vak
+            </button>
           </div>
         </div>
 
@@ -377,7 +417,8 @@ onMounted(() => { void loadOverview() })
               v-for="item in collectionItems"
               :key="item.id"
               type="button"
-              draggable="true"
+              :draggable="!saving"
+              :disabled="saving"
               :aria-pressed="selectedItemId === item.id"
               @dragstart="startDrag($event, item.id)"
               @click="selectCollectionItem(item.id)"
