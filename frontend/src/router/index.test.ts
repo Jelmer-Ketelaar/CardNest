@@ -59,6 +59,14 @@ describe('router authentication guard', () => {
     expect(router.currentRoute.value.name).toBe('catalog-card')
   })
 
+  it('allows an unauthenticated visitor to view a public marketplace listing', async () => {
+    // Act
+    await router.push({ name: 'marketplace-listing', params: { id: 'listing-id' } })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('marketplace-listing')
+  })
+
   it('redirects an unauthenticated visitor away from a collection item', async () => {
     // Act
     await router.push({ name: 'collection-item', params: { id: 'item-id' } })
