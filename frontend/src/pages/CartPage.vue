@@ -98,6 +98,8 @@ async function removeItem(itemId: string): Promise<void> {
 }
 
 async function checkout(): Promise<void> {
+  if (checkingOut.value) return
+
   if (!cart.value?.checkoutAvailable || !allShippingSelected.value) {
     error.value = 'Controleer de beschikbaarheid en kies een verzendmethode per verkoper.'
     return

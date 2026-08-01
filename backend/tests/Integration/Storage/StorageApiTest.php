@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Storage;
 
+use App\Binder\Domain\Entity\Binder;
+use App\Binder\Domain\Entity\BinderLayoutStrategy;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
@@ -11,9 +13,12 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
+use App\Storage\Domain\Entity\StorageLocation;
+use App\Storage\Domain\Entity\StorageLocationType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -23,6 +28,7 @@ final class StorageApiTest extends WebTestCase
 {
     private KernelBrowser $client;
     private EntityManagerInterface $entityManager;
+    private User $owner;
     private string $ownerToken;
     private string $otherToken;
     private CollectionItem $item;
@@ -31,9 +37,11 @@ final class StorageApiTest extends WebTestCase
     {
         $this->client = self::createClient();
         $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
-        [$owner, $this->ownerToken] = $this->createAuthenticatedUser('owner');
+        [$this->owner, $this->ownerToken] = $this->createAuthenticatedUser('owner');
         [, $this->otherToken] = $this->createAuthenticatedUser('other');
-        $this->item = $this->createItem($owner);
+        $collection = new Collection($this->owner);
+        $this->entityManager->persist($collection);
+        $this->item = $this->createItem($collection);
         $this->entityManager->flush();
     }
 
@@ -185,6 +193,87 @@ final class StorageApiTest extends WebTestCase
         self::assertSame('collection_item_archived', $this->responseData()['error']['code'] ?? null);
     }
 
+    public function testOwnerCanDeleteOnlyAnEmptyUnreferencedStorageLocation(): void
+    {
+        // Arrange
+        $emptyLocationId = $this->createLocation('Temporary box', 'box', null, $this->ownerToken);
+
+        // Act
+        $this->authorizedRequest('DELETE', '/api/v1/me/storage-locations/'.$emptyLocationId, $this->otherToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('storage_location_not_found', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->authorizedRequest('DELETE', '/api/v1/me/storage-locations/'.$emptyLocationId, $this->ownerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(204);
+
+        // Act
+        $this->authorizedRequest('GET', '/api/v1/me/storage-locations/'.$emptyLocationId, $this->ownerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('storage_location_not_found', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testStorageLocationWithChildrenOrPlacementHistoryCannotBeDeleted(): void
+    {
+        // Arrange
+        $rootId = $this->createLocation('Collection room', 'other', null, $this->ownerToken);
+        $childId = $this->createLocation('Archive box', 'box', $rootId, $this->ownerToken);
+
+        // Act
+        $this->authorizedRequest('DELETE', '/api/v1/me/storage-locations/'.$rootId, $this->ownerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('storage_location_in_use', $this->responseData()['error']['code'] ?? null);
+
+        // Arrange
+        $this->placeItem($this->item->getId()->toRfc4122(), $childId, $this->ownerToken);
+        self::assertResponseIsSuccessful();
+
+        // Act
+        $this->authorizedRequest('DELETE', '/api/v1/me/storage-locations/'.$childId, $this->ownerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('storage_location_in_use', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testStorageLocationReferencedByBinderCannotBeDeleted(): void
+    {
+        // Arrange
+        $location = new StorageLocation($this->owner, 'Binder shelf', StorageLocationType::Other);
+        $binder = new Binder(
+            owner: $this->owner,
+            name: 'Water cards',
+            rows: 3,
+            columns: 3,
+            pageCount: 1,
+            doubleSided: false,
+            layoutStrategy: BinderLayoutStrategy::Custom,
+            parentLocation: $location,
+        );
+        $this->entityManager->persist($location);
+        $this->entityManager->persist($binder);
+        $this->entityManager->flush();
+
+        // Act
+        $this->authorizedRequest(
+            'DELETE',
+            '/api/v1/me/storage-locations/'.$location->getId()->toRfc4122(),
+            $this->ownerToken,
+        );
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('storage_location_in_use', $this->responseData()['error']['code'] ?? null);
+    }
+
     private function createLocation(string $name, string $type, ?string $parentId, string $token): string
     {
         $payload = ['name' => $name, 'type' => $type];
@@ -222,7 +311,7 @@ final class StorageApiTest extends WebTestCase
         return [$user, $plainToken];
     }
 
-    private function createItem(User $owner): CollectionItem
+    private function createItem(Collection $collection): CollectionItem
     {
         $suffix = Uuid::v7()->toRfc4122();
         $series = new CardSeries('Series '.$suffix);
@@ -237,7 +326,7 @@ final class StorageApiTest extends WebTestCase
         );
         $card = new CatalogCard($set, 'Mudkip', '19/25', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($owner, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $item = new CollectionItem($collection, $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $this->entityManager->persist($series);
         $this->entityManager->persist($set);
         $this->entityManager->persist($card);

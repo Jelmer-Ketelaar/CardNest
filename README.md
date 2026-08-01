@@ -43,7 +43,7 @@ CardNest is implemented incrementally, one module at a time. This is the current
 
 - Browse card series and sets (`GET /api/v1/card-sets`), each with release date, language, printed/total card
   counts, and lifecycle status (announced, active, out of print, unknown)
-- Search the catalog (`GET /api/v1/cards`) filtered by set, name, card number, or rarity, with pagination
+- Search the catalog (`GET /api/v1/cards`) filtered by set, series, name, card number, rarity, or variant, with pagination
 - Look up a single set or card in full detail, including every variant it was printed in (holo, reverse holo,
   illustration rare, ...) drawn from a closed, configurable vocabulary instead of free text
 - Every catalog card keeps, and exposes, a record of the external source(s) it was imported from (source name,
@@ -323,6 +323,7 @@ Run the main quality checks with:
 docker compose exec backend vendor/bin/phpunit
 docker compose exec backend vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 docker compose exec backend vendor/bin/php-cs-fixer fix --dry-run --diff
+docker compose exec frontend npm run lint
 docker compose exec frontend npm test
 docker compose exec frontend npm run build
 docker compose exec frontend npm run test:e2e
@@ -332,5 +333,9 @@ docker compose exec frontend npm run test:e2e
 
 - [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes
 - [docs/architecture.md](docs/architecture.md) — system diagram, module layering, and an end-to-end request walkthrough
+- [docs/security-review.md](docs/security-review.md) — repeatable MVP security release gate and evidence template
+- [docs/release-checklist.md](docs/release-checklist.md) — MVP quality, security, accessibility and deployment release gate
+- [docs/production-environment.md](docs/production-environment.md) — production configuration and operational expectations
+- [docs/release-notes/mvp.md](docs/release-notes/mvp.md) — delivered MVP scope and explicit limitations
 - [CONTRIBUTING.md](CONTRIBUTING.md) — ground rules, coding standards, and the workflow for adding the next module
 - [frontend/README.md](frontend/README.md) — frontend structure, API-client conventions, and how to add a page

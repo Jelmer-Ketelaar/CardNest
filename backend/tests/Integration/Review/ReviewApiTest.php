@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
@@ -36,6 +37,7 @@ final class ReviewApiTest extends WebTestCase
     private EntityManagerInterface $entityManager;
     private User $buyer;
     private User $seller;
+    private Collection $sellerCollection;
     private string $buyerToken;
     private string $sellerToken;
     private string $outsiderToken;
@@ -48,6 +50,8 @@ final class ReviewApiTest extends WebTestCase
         $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
         [$this->buyer, $this->buyerToken] = $this->createAuthenticatedUser('buyer');
         [$this->seller, $this->sellerToken] = $this->createAuthenticatedUser('seller');
+        $this->sellerCollection = new Collection($this->seller);
+        $this->entityManager->persist($this->sellerCollection);
         [, $this->outsiderToken] = $this->createAuthenticatedUser('outsider');
         $this->completedOrder = $this->createOrder(true);
         $this->paidOrder = $this->createOrder(false);
@@ -200,7 +204,7 @@ final class ReviewApiTest extends WebTestCase
         $set = new CardSet($series, 'Review set '.$suffix, 'review-'.$suffix, 'en', 1, 1, status: CardSetStatus::Active);
         $card = new CatalogCard($set, 'Mudkip', '1/1', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($this->seller, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $item = new CollectionItem($this->sellerCollection, $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $listing = new Listing(
             $this->seller,
             $item,
@@ -214,7 +218,7 @@ final class ReviewApiTest extends WebTestCase
         $listing->setWorkflowStatus('reserved');
         $item->markForSale();
         $payment = new Payment($this->buyer, new Money(900, 'EUR'), 'fake');
-        $payment->recordResult(PaymentResult::succeeded('review-'.$suffix));
+        $payment->recordResult(PaymentResult::succeeded(new Money(900, 'EUR'), 'review-'.$suffix));
         $order = new Order(
             $this->buyer,
             $this->seller,

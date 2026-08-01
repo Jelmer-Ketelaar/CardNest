@@ -19,12 +19,12 @@ use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'collection_items')]
-#[ORM\Index(name: 'idx_collection_items_owner_status', columns: ['owner_id', 'status'])]
+#[ORM\Index(name: 'idx_collection_items_collection_status', columns: ['collection_id', 'status'])]
 #[ORM\Index(name: 'idx_collection_items_card', columns: ['catalog_card_id'])]
 #[ORM\Index(name: 'idx_collection_items_variant', columns: ['variant_id'])]
 #[ORM\Index(
     name: 'idx_collection_items_duplicates',
-    columns: ['owner_id', 'catalog_card_id', 'language', 'variant_id', 'status'],
+    columns: ['collection_id', 'catalog_card_id', 'language', 'variant_id', 'status'],
 )]
 final class CollectionItem
 {
@@ -42,9 +42,9 @@ final class CollectionItem
     private DateTimeImmutable $updatedAt;
 
     public function __construct(
-        #[ORM\ManyToOne(targetEntity: User::class)]
-        #[ORM\JoinColumn(name: 'owner_id', nullable: false, onDelete: 'CASCADE')]
-        private readonly User $owner,
+        #[ORM\ManyToOne(targetEntity: Collection::class)]
+        #[ORM\JoinColumn(name: 'collection_id', nullable: false, onDelete: 'CASCADE')]
+        private readonly Collection $collection,
         #[ORM\ManyToOne(targetEntity: CatalogCard::class)]
         #[ORM\JoinColumn(name: 'catalog_card_id', nullable: false, onDelete: 'RESTRICT')]
         private readonly CatalogCard $catalogCard,
@@ -83,7 +83,12 @@ final class CollectionItem
 
     public function getOwner(): User
     {
-        return $this->owner;
+        return $this->collection->getOwner();
+    }
+
+    public function getCollection(): Collection
+    {
+        return $this->collection;
     }
 
     public function getCatalogCard(): CatalogCard

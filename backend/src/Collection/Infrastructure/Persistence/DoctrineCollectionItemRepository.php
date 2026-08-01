@@ -38,7 +38,7 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
 
         /** @var list<CollectionItem> $items */
         $items = $this->baseQuery($owner, $criteria)
-            ->select('i', 'c', 's', 'v')
+            ->select('i', 'co', 'c', 's', 'v')
             ->orderBy('i.createdAt', 'DESC')
             ->addOrderBy('i.id', 'DESC')
             ->setFirstResult(($criteria->page - 1) * $criteria->perPage)
@@ -58,13 +58,14 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
 
         /** @var CollectionItem|null $item */
         $item = $this->entityManager->createQueryBuilder()
-            ->select('i', 'c', 's', 'v')
+            ->select('i', 'co', 'c', 's', 'v')
             ->from(CollectionItem::class, 'i')
+            ->join('i.collection', 'co')
             ->join('i.catalogCard', 'c')
             ->join('c.set', 's')
             ->join('i.variant', 'v')
             ->where('i.id = :id')
-            ->andWhere('i.owner = :owner')
+            ->andWhere('co.owner = :owner')
             ->setParameter('id', $uuid, UuidType::NAME)
             ->setParameter('owner', $owner)
             ->getQuery()
@@ -97,9 +98,10 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
                        language,
                        variant_id::text AS variant_id,
                        COUNT(*) AS item_count
-                FROM collection_items
-                WHERE owner_id = :owner_id AND status IN (:statuses)
-                GROUP BY catalog_card_id, language, variant_id
+                FROM collection_items item
+                JOIN collections collection ON collection.id = item.collection_id
+                WHERE collection.owner_id = :owner_id AND item.status IN (:statuses)
+                GROUP BY item.catalog_card_id, item.language, item.variant_id
                 SQL,
             [
                 'owner_id' => $owner->getId()->toRfc4122(),
@@ -131,7 +133,8 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
         $query = $this->entityManager->createQueryBuilder()
             ->select('COUNT(i.id)')
             ->from(CollectionItem::class, 'i')
-            ->where('i.owner = :owner')
+            ->join('i.collection', 'co')
+            ->where('co.owner = :owner')
             ->andWhere('i.catalogCard = :card')
             ->andWhere('i.status IN (:statuses)')
             ->setParameter('owner', $owner)
@@ -165,10 +168,11 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
     {
         $query = $this->entityManager->createQueryBuilder()
             ->from(CollectionItem::class, 'i')
+            ->join('i.collection', 'co')
             ->join('i.catalogCard', 'c')
             ->join('c.set', 's')
             ->join('i.variant', 'v')
-            ->where('i.owner = :owner')
+            ->where('co.owner = :owner')
             ->setParameter('owner', $owner);
 
         $this->applyUuidFilter($query, 'c.id', 'cardId', $criteria->cardId);

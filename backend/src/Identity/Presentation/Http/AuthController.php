@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace App\Identity\Presentation\Http;
 
+use App\Identity\Application\ConfirmPasswordReset;
+use App\Identity\Application\Dto\ConfirmPasswordResetRequest;
 use App\Identity\Application\Dto\LoginRequest;
 use App\Identity\Application\Dto\RegisterRequest;
+use App\Identity\Application\Dto\RequestPasswordResetRequest;
 use App\Identity\Application\Dto\UserResponse;
 use App\Identity\Application\Dto\VerifyEmailRequest;
 use App\Identity\Application\LoginUser;
 use App\Identity\Application\LogoutUser;
 use App\Identity\Application\RegisterUser;
+use App\Identity\Application\RequestPasswordReset;
 use App\Identity\Application\ResendEmailVerification;
 use App\Identity\Application\Security\EmailVerificationRateLimiter;
 use App\Identity\Application\Security\LoginRateLimiter;
+use App\Identity\Application\Security\PasswordResetRateLimiter;
 use App\Identity\Application\VerifyEmail;
 use App\Identity\Domain\Entity\User;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -55,6 +60,29 @@ final readonly class AuthController
     public function logout(Request $request, LogoutUser $service): Response
     {
         $service->logout(substr((string) $request->headers->get('Authorization'), 7));
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
+    }
+
+    #[Route('/forgot-password', methods: ['POST'])]
+    public function requestPasswordReset(
+        #[MapRequestPayload] RequestPasswordResetRequest $request,
+        Request $httpRequest,
+        PasswordResetRateLimiter $rateLimiter,
+        RequestPasswordReset $service,
+    ): Response {
+        $rateLimiter->consume($request->email, $httpRequest->getClientIp() ?? 'unknown');
+        $service->request($request);
+
+        return new Response(status: Response::HTTP_ACCEPTED);
+    }
+
+    #[Route('/reset-password', methods: ['POST'])]
+    public function confirmPasswordReset(
+        #[MapRequestPayload] ConfirmPasswordResetRequest $request,
+        ConfirmPasswordReset $service,
+    ): Response {
+        $service->confirm($request);
 
         return new Response(status: Response::HTTP_NO_CONTENT);
     }

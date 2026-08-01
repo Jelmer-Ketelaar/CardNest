@@ -9,6 +9,7 @@ use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Repository\CollectionItemRepository;
+use App\Collection\Domain\Repository\CollectionRepository;
 use App\Identity\Domain\Entity\User;
 use App\Order\Application\Dto\ImportOrderItemRequest;
 use App\Order\Application\Dto\OrderResponse;
@@ -29,6 +30,7 @@ final readonly class ImportOrderItemToCollection
 {
     public function __construct(
         private OrderRepository $orders,
+        private CollectionRepository $collections,
         private CollectionItemRepository $collectionItems,
         private RegisteredCollectionItemsProcessor $registeredItemsProcessor,
         private StorageLocationResolver $storageLocations,
@@ -60,8 +62,9 @@ final readonly class ImportOrderItemToCollection
             $location = $this->storageLocations->optionalOwned($request->storageLocationId, $buyer);
             $source = $orderItem->getListing()->getCollectionItem();
             $importedAt = new DateTimeImmutable();
+            $collection = $this->collections->getOrCreateForOwner($buyer);
             $collectionItem = new CollectionItem(
-                owner: $buyer,
+                collection: $collection,
                 catalogCard: $source->getCatalogCard(),
                 variant: $source->getVariant(),
                 language: CardLanguage::from($request->language),

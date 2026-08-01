@@ -98,6 +98,16 @@ final class CatalogApiTest extends WebTestCase
         self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
     }
 
+    public function testInvalidVariantFilterReturnsStructuredValidationError(): void
+    {
+        // Act
+        $this->client->request('GET', '/api/v1/cards?variant=foil');
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
     public function testUnknownCardReturnsStructuredNotFoundError(): void
     {
         // Arrange
@@ -105,6 +115,19 @@ final class CatalogApiTest extends WebTestCase
 
         // Act
         $this->client->request('GET', '/api/v1/cards/'.$unknownId);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('request_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testUnknownCardSetReturnsStructuredNotFoundError(): void
+    {
+        // Arrange
+        $unknownId = Uuid::v7()->toRfc4122();
+
+        // Act
+        $this->client->request('GET', '/api/v1/card-sets/'.$unknownId);
 
         // Assert
         self::assertResponseStatusCodeSame(404);

@@ -29,8 +29,14 @@ services:
     App\Identity\Domain\Repository\EmailVerificationTokenRepository:
         alias: App\Identity\Infrastructure\Persistence\DoctrineEmailVerificationTokenRepository
 
+    App\Identity\Domain\Repository\PasswordResetTokenRepository:
+        alias: App\Identity\Infrastructure\Persistence\DoctrinePasswordResetTokenRepository
+
     App\Identity\Application\Email\EmailVerificationSender:
         alias: App\Identity\Infrastructure\Email\LoggingEmailVerificationSender
+
+    App\Identity\Application\Email\PasswordResetSender:
+        alias: App\Identity\Infrastructure\Email\LoggingPasswordResetSender
 
     App\Identity\Application\Security\LoginRateLimiter:
         arguments:
@@ -40,6 +46,10 @@ services:
         arguments:
             $limiter: '@limiter.email_verification'
 
+    App\Identity\Application\Security\PasswordResetRateLimiter:
+        arguments:
+            $limiter: '@limiter.password_reset'
+
     App\Catalog\Domain\Repository\CardSetRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCardSetRepository
 
@@ -48,6 +58,9 @@ services:
 
     App\Collection\Domain\Repository\CollectionItemRepository:
         alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionItemRepository
+
+    App\Collection\Domain\Repository\CollectionRepository:
+        alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionRepository
 
     App\Storage\Domain\Repository\StorageLocationRepository:
         alias: App\Storage\Infrastructure\Persistence\DoctrineStorageLocationRepository
@@ -93,3 +106,9 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+when@test:
+    services:
+        App\Payment\Domain\Provider\PaymentProvider:
+            alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
+            public: true

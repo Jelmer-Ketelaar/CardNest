@@ -6,6 +6,7 @@ namespace App\Storage\Presentation\Http;
 
 use App\Identity\Domain\Entity\User;
 use App\Storage\Application\CreateStorageLocation;
+use App\Storage\Application\DeleteStorageLocation;
 use App\Storage\Application\Dto\CreateStorageLocationRequest;
 use App\Storage\Application\Dto\UpdateStorageLocationRequest;
 use App\Storage\Application\FindStorageLocations;
@@ -48,5 +49,13 @@ final readonly class StorageLocationController
         UpdateStorageLocation $service,
     ): JsonResponse {
         return new JsonResponse($service->update($owner, $id, $request)->toArray());
+    }
+
+    #[Route('/{id}', methods: ['DELETE'])]
+    public function delete(#[CurrentUser] User $owner, string $id, DeleteStorageLocation $service): Response
+    {
+        $service->delete($owner, $id);
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
     }
 }

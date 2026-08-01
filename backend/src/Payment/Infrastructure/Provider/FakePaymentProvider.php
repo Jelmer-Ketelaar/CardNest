@@ -17,6 +17,9 @@ final readonly class FakePaymentProvider implements PaymentProvider
 
     public function charge(PaymentInstruction $instruction): PaymentResult
     {
-        return PaymentResult::succeeded('fake_'.$instruction->paymentId);
+        return PaymentResult::succeeded(
+            $instruction->amount,
+            'fake_'.hash('sha256', $instruction->idempotencyKey),
+        );
     }
 }

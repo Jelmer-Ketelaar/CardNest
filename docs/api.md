@@ -31,6 +31,50 @@ rate-limited (5/minute) per normalized e-mail + client IP; exceeding it returns 
 
 `POST /api/v1/auth/logout` revokes the current bearer token and returns `204`.
 
+`POST /api/v1/auth/forgot-password` accepts an e-mail address and always returns `202` for a valid request,
+regardless of whether an account exists. This prevents account enumeration. For an existing account, CardNest stores
+only a hash of a single-use reset token that expires after one hour and queues a reset message. The endpoint is
+rate-limited to three requests per hour per normalized e-mail and IP address. It never returns or logs the plaintext
+reset token.
+
+```json
+{ "email": "collector@example.com" }
+```
+
+Malformed e-mail input returns the standard `422` validation response. Submitting a new request for the same account
+invalidates its previous reset token.
+
+`POST /api/v1/auth/reset-password` confirms a reset with the queued token and a new password:
+
+```json
+{
+  "token": "a 64-character lowercase hexadecimal token",
+  "password": "A-new-strong-password-123",
+  "passwordConfirmation": "A-new-strong-password-123"
+}
+```
+
+It returns `204` on success. The token must be unexpired and can be used only once; invalid, expired, or previously
+used tokens return `400 invalid_password_reset_token`. A successful reset revokes every existing bearer token for
+the account, so the user must sign in again with the new password. Malformed tokens or passwords return `422`.
+
+`GET /api/v1/me` requires a bearer token and returns the authenticated user's safe profile data:
+
+```json
+{
+  "user": {
+    "id": "0198d5ea-37c8-7dd4-a993-48ea916b7e19",
+    "email": "collector@example.com",
+    "roles": ["ROLE_USER"],
+    "emailVerifiedAt": null,
+    "createdAt": "2026-08-01T10:30:00+00:00"
+  }
+}
+```
+
+The response never contains a password hash, bearer token, reset token, or other credential data. Missing or invalid
+authentication returns the standard `401` JSON error.
+
 ## Card catalog
 
 Read-only and public. Describes official card data only — never a card a specific user owns.
@@ -42,9 +86,11 @@ Read-only and public. Describes official card data only — never a card a speci
 | Parameter | Type | Notes |
 | --- | --- | --- |
 | `setId` | UUID | exact card-set match |
+| `seriesId` | UUID | exact card-series match |
 | `name` | string | case-insensitive, partial |
 | `number` | string | case-insensitive, partial |
 | `rarity` | string | case-insensitive, exact |
+| `variant` | string | one of the documented variant codes; cards with that variant only |
 | `page` | int ≥ 1 | default `1` |
 | `perPage` | int 1–100 | default `20` |
 
@@ -165,6 +211,10 @@ while `path` returns the complete root-to-location trail needed to answer “whe
 `parentId` is optional and must identify another location owned by the caller. `GET
 /api/v1/me/storage-locations/{id}` returns one location. `PATCH /api/v1/me/storage-locations/{id}` changes `name`,
 `type`, or its parent; use `clearParent: true` to move it to the root. Cycles and cross-owner parents return `422`.
+`DELETE /api/v1/me/storage-locations/{id}` returns `204` for an empty, unreferenced location. To preserve a card's
+physical-history trail, a location with child locations, a binder association, or any current or past item placement
+cannot be deleted and returns `409 storage_location_in_use`; move cards and binders first, then retain or rename the
+historical location instead.
 
 `POST /api/v1/me/collection-items/{itemId}/location` places or moves one physical card into a generic storage
 location atomically:
@@ -279,8 +329,25 @@ Mint). Adding a goal immediately counts matching cards currently in the collecti
 
 The response preserves `desiredQuantity` and exposes `fulfilledQuantity`, `remainingQuantity`, `completed`, and
 `completedAt`. Registering new physical cards automatically advances every matching open goal, never beyond the
-desired quantity. `DELETE /api/v1/me/wishlists/{id}/items/{itemId}` removes one goal and returns the updated wishlist.
-Foreign wishlist and item UUIDs use owner-safe `404` responses.
+desired quantity.
+
+PATCH /api/v1/me/wishlists/{id}/items/{itemId} updates a goal's preferences without changing its catalog card.
+Only supplied fields are changed; use the corresponding clear flag to remove an optional preference. For example:
+
+~~~json
+{
+  "clearLanguage": true,
+  "maxPrice": 1000,
+  "maxCurrency": "EUR",
+  "desiredQuantity": 3,
+  "priority": "high"
+}
+~~~
+
+Supported clear flags are clearLanguage, clearVariant, clearMinimumCondition, clearMaxPrice, and clearNotes.
+After a preference update, fulfillment is recalculated from the caller's current collection. DELETE
+/api/v1/me/wishlists/{id}/items/{itemId} removes one goal and returns the updated wishlist. Foreign wishlist and item
+UUIDs use owner-safe 404 responses.
 
 ## Marketplace listings
 
@@ -712,6 +779,7 @@ Every error response follows the same shape:
 | `collection_item_archived` | 409 | Attempted to change an archived collection item |
 | `collection_item_listed` | 409 | Attempted to change or archive a physical item currently for sale |
 | `storage_location_not_found` | 404 | Location doesn't exist, or isn't owned by the caller |
+| `storage_location_in_use` | 409 | Location has child locations, a binder, or item location history |
 | `invalid_storage_hierarchy` | 422 | Parent creates a cycle or belongs to another user |
 | `binder_not_found` | 404 | Binder/slot doesn't exist, or isn't owned by the caller |
 | `binder_slot_occupied` | 409 | Another physical item already occupies the target slot |

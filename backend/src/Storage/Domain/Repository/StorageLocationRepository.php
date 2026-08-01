@@ -15,4 +15,8 @@ interface StorageLocationRepository
     public function getForOwner(string $id, User $owner): ?StorageLocation;
 
     public function save(StorageLocation $location): void;
+
+    public function isRemovable(StorageLocation $location): bool;
+
+    public function remove(StorageLocation $location): void;
 }

@@ -20,16 +20,19 @@ async function logout(): Promise<void> {
     <header class="site-header">
       <RouterLink class="brand" :to="{ name: auth.isAuthenticated ? 'dashboard' : 'marketplace' }">CardNest</RouterLink>
       <nav aria-label="Hoofdnavigatie">
+        <RouterLink :to="{ name: 'catalog-sets' }">Catalogus</RouterLink>
         <RouterLink :to="{ name: 'marketplace' }">Marktplaats</RouterLink>
         <template v-if="auth.isAuthenticated">
           <RouterLink :to="{ name: 'dashboard' }">Dashboard</RouterLink>
+          <RouterLink :to="{ name: 'account' }">Account</RouterLink>
           <RouterLink :to="{ name: 'collection' }">Collectie</RouterLink>
           <RouterLink :to="{ name: 'storage' }">Opslag</RouterLink>
           <RouterLink :to="{ name: 'binders' }">Binders</RouterLink>
           <RouterLink :to="{ name: 'wishlists' }">Wishlists</RouterLink>
           <RouterLink :to="{ name: 'my-listings' }">Mijn verkoop</RouterLink>
           <RouterLink :to="{ name: 'cart' }">Winkelmand</RouterLink>
-          <RouterLink :to="{ name: 'orders' }">Orders</RouterLink>
+          <RouterLink :to="{ name: 'orders' }">Mijn aankopen</RouterLink>
+          <RouterLink :to="{ name: 'seller-orders' }">Mijn verkopen</RouterLink>
         </template>
       </nav>
       <BaseButton v-if="auth.isAuthenticated" variant="secondary" @click="logout">Uitloggen</BaseButton>

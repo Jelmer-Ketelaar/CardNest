@@ -19,6 +19,7 @@ use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\EmailAlreadyVerified;
 use App\Identity\Application\Exception\InvalidCredentials;
 use App\Identity\Application\Exception\InvalidEmailVerificationToken;
+use App\Identity\Application\Exception\InvalidPasswordResetToken;
 use App\Marketplace\Application\Exception\ListingNotFound;
 use App\Marketplace\Domain\Exception\CannotPurchaseOwnListing;
 use App\Marketplace\Domain\Exception\InvalidListing;
@@ -43,6 +44,7 @@ use App\Shipping\Domain\Exception\InvalidShipment;
 use App\Storage\Application\Exception\StorageLocationNotFound;
 use App\Storage\Domain\Exception\InvalidStorageHierarchy;
 use App\Storage\Domain\Exception\InvalidStorageTarget;
+use App\Storage\Domain\Exception\StorageLocationInUse;
 use App\Storage\Domain\Exception\StorageOwnerMismatch;
 use App\Wishlist\Application\Exception\WishlistCardUnavailable;
 use App\Wishlist\Application\Exception\WishlistItemNotFound;
@@ -78,6 +80,7 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof EmailAlreadyVerified => [409, 'email_already_verified', $exception->getMessage()],
             $exception instanceof InvalidCredentials => [401, 'invalid_credentials', $exception->getMessage()],
             $exception instanceof InvalidEmailVerificationToken => [400, 'invalid_email_verification_token', $exception->getMessage()],
+            $exception instanceof InvalidPasswordResetToken => [400, 'invalid_password_reset_token', $exception->getMessage()],
             $exception instanceof CollectionItemNotFound => [404, 'collection_item_not_found', $exception->getMessage()],
             $exception instanceof CatalogCardUnavailable => [422, 'catalog_card_unavailable', $exception->getMessage()],
             $exception instanceof CardVariantUnavailable,
@@ -85,6 +88,7 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof ArchivedCollectionItemCannotBeChanged => [409, 'collection_item_archived', $exception->getMessage()],
             $exception instanceof ListedCollectionItemCannotBeChanged => [409, 'collection_item_listed', $exception->getMessage()],
             $exception instanceof StorageLocationNotFound => [404, 'storage_location_not_found', $exception->getMessage()],
+            $exception instanceof StorageLocationInUse => [409, 'storage_location_in_use', $exception->getMessage()],
             $exception instanceof InvalidStorageHierarchy,
             $exception instanceof InvalidStorageTarget,
             $exception instanceof StorageOwnerMismatch => [422, 'invalid_storage_hierarchy', $exception->getMessage()],

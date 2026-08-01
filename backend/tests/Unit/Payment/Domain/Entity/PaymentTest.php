@@ -8,6 +8,7 @@ use App\Identity\Domain\Entity\User;
 use App\Payment\Domain\Entity\Payment;
 use App\Payment\Domain\Entity\PaymentStatus;
 use App\Payment\Domain\Entity\PaymentTransactionStatus;
+use App\Payment\Domain\Exception\InvalidPayment;
 use App\Payment\Domain\Provider\PaymentResult;
 use App\Shared\Domain\ValueObject\Money;
 use PHPUnit\Framework\TestCase;
@@ -20,7 +21,7 @@ final class PaymentTest extends TestCase
         $payment = new Payment(new User('buyer@example.com', 'hash'), new Money(1200, 'EUR'), 'fake');
 
         // Act
-        $payment->recordResult(PaymentResult::succeeded('fake_reference'));
+        $payment->recordResult(PaymentResult::succeeded(new Money(1200, 'EUR'), 'fake_reference'));
 
         // Assert
         self::assertSame(PaymentStatus::Succeeded, $payment->getStatus());
@@ -38,7 +39,7 @@ final class PaymentTest extends TestCase
         $payment = new Payment(new User('buyer@example.com', 'hash'), new Money(1200, 'EUR'), 'fake');
 
         // Act
-        $payment->recordResult(PaymentResult::failed('Testbetaling geweigerd.'));
+        $payment->recordResult(PaymentResult::failed(new Money(1200, 'EUR'), 'Testbetaling geweigerd.'));
 
         // Assert
         self::assertSame(PaymentStatus::Failed, $payment->getStatus());
@@ -48,5 +49,17 @@ final class PaymentTest extends TestCase
         self::assertNotFalse($transaction);
         self::assertSame(PaymentTransactionStatus::Failed, $transaction->getStatus());
         self::assertSame('Testbetaling geweigerd.', $transaction->getFailureReason());
+    }
+
+    public function testRejectsProviderResultForADifferentAmountOrCurrency(): void
+    {
+        // Arrange
+        $payment = new Payment(new User('buyer@example.com', 'hash'), new Money(1200, 'EUR'), 'fake');
+
+        // Assert
+        $this->expectException(InvalidPayment::class);
+
+        // Act
+        $payment->recordResult(PaymentResult::succeeded(new Money(1201, 'EUR'), 'fake_reference'));
     }
 }

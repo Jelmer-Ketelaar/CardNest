@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
@@ -21,6 +21,7 @@ const conditions = [
 ] as const
 
 const auth = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 const listings = ref<Listing[]>([])
 const selectedListing = ref<Listing | null>(null)
@@ -32,6 +33,8 @@ const addingListingId = ref<string | null>(null)
 const error = ref('')
 const success = ref('')
 const filters = reactive({ cardName: '', language: '', condition: '', maximumPrice: '', pickupAllowed: false })
+let latestRequest = 0
+let latestDetailRequest = 0
 
 function caughtMessage(caught: unknown, fallback: string): string {
   return caught instanceof ApiError ? caught.message : fallback
@@ -49,18 +52,55 @@ function lowestTotal(listing: Listing): number {
   return Math.min(...listing.shippingMethods.map((method) => method.totalPrice.amount))
 }
 
+function routeValue(name: string): string {
+  const value = route.query[name]
+  const candidate = Array.isArray(value) ? value[0] : value
+
+  return typeof candidate === 'string' ? candidate : ''
+}
+
+function requestedPage(): number {
+  const value = Number(routeValue('page'))
+
+  return Number.isInteger(value) && value > 0 ? value : 1
+}
+
+function browseQuery(): Record<string, string> {
+  const query: Record<string, string> = {}
+  if (filters.cardName.trim()) query.cardName = filters.cardName.trim()
+  if (filters.language) query.language = filters.language
+  if (filters.condition) query.condition = filters.condition
+  if (filters.maximumPrice.trim()) query.maximumPrice = filters.maximumPrice.trim()
+  if (filters.pickupAllowed) query.pickupAllowed = '1'
+  if (page.value > 1) query.page = String(page.value)
+
+  return query
+}
+
+function applyRouteState(): void {
+  filters.cardName = routeValue('cardName')
+  filters.language = routeValue('language')
+  filters.condition = routeValue('condition')
+  filters.maximumPrice = routeValue('maximumPrice')
+  filters.pickupAllowed = routeValue('pickupAllowed') === '1'
+  page.value = requestedPage()
+}
+
 async function loadListings(): Promise<void> {
+  const request = ++latestRequest
   loading.value = true
   error.value = ''
   const query = new URLSearchParams({ page: String(page.value), perPage: '24' })
-  if (filters.cardName.trim()) query.set('cardName', filters.cardName.trim())
-  if (filters.language) query.set('language', filters.language)
-  if (filters.condition) query.set('condition', filters.condition)
-  if (filters.pickupAllowed) query.set('pickupAllowed', '1')
+  for (const [name, value] of Object.entries(browseQuery())) {
+    if (name !== 'page') query.set(name, value)
+  }
   try {
     const maximumPrice = parseOptionalMinorUnits(filters.maximumPrice)
     if (maximumPrice !== null) query.set('maximumPrice', String(maximumPrice))
   } catch (caught) {
+    listings.value = []
+    total.value = 0
+    totalPages.value = 0
     error.value = caughtMessage(caught, 'Vul een geldige maximumprijs in centen in.')
     loading.value = false
     return
@@ -68,37 +108,74 @@ async function loadListings(): Promise<void> {
 
   try {
     const response = await apiRequest<PaginatedResponse<Listing>>(`/listings?${query}`)
+    if (request !== latestRequest) return
+
     listings.value = response.items
     total.value = response.total
     totalPages.value = response.totalPages
   } catch (caught) {
+    if (request !== latestRequest) return
+
+    listings.value = []
+    total.value = 0
+    totalPages.value = 0
     error.value = caughtMessage(caught, 'De marktplaats kon niet worden geladen.')
   } finally {
-    loading.value = false
+    if (request === latestRequest) loading.value = false
   }
 }
 
+async function updateBrowseRoute(targetPage: number): Promise<void> {
+  if (loading.value) return
+
+  page.value = targetPage
+  await router.push({ name: 'marketplace', query: browseQuery() })
+}
+
 async function applyFilters(): Promise<void> {
-  page.value = 1
-  await loadListings()
+  await updateBrowseRoute(1)
 }
 
 async function goToPage(target: number): Promise<void> {
-  page.value = target
-  await loadListings()
+  await updateBrowseRoute(target)
 }
 
-async function openListing(id: string): Promise<void> {
+async function loadSelectedListing(id: string): Promise<void> {
+  const request = ++latestDetailRequest
   error.value = ''
   success.value = ''
+  selectedListing.value = null
   try {
-    selectedListing.value = await apiRequest<Listing>(`/listings/${id}`)
+    const listing = await apiRequest<Listing>(`/listings/${id}`)
+    if (request !== latestDetailRequest) return
+
+    selectedListing.value = listing
   } catch (caught) {
+    if (request !== latestDetailRequest) return
+
     error.value = caughtMessage(caught, 'De listing kon niet worden geopend.')
   }
 }
 
+async function openListing(id: string): Promise<void> {
+  if (route.params.id === id) {
+    await loadSelectedListing(id)
+
+    return
+  }
+
+  await router.push({ name: 'marketplace-listing', params: { id }, query: route.query })
+}
+
+async function closeListing(): Promise<void> {
+  latestDetailRequest += 1
+  selectedListing.value = null
+  await router.replace({ name: 'marketplace', query: route.query })
+}
+
 async function addToCart(listing: Listing): Promise<void> {
+  if (addingListingId.value !== null) return
+
   if (!auth.isAuthenticated) {
     await router.push({ name: 'login' })
     return
@@ -112,7 +189,7 @@ async function addToCart(listing: Listing): Promise<void> {
       method: 'POST',
       body: JSON.stringify({ listingId: listing.id }),
     })
-    selectedListing.value = null
+    await closeListing()
     success.value = `${listing.card.name} is toegevoegd. Je winkelmand bevat nu ${cart.itemCount} ${cart.itemCount === 1 ? 'kaart' : 'kaarten'}.`
   } catch (caught) {
     error.value = caughtMessage(caught, 'De aanbieding kon niet aan je winkelmand worden toegevoegd.')
@@ -121,7 +198,21 @@ async function addToCart(listing: Listing): Promise<void> {
   }
 }
 
-onMounted(() => { void loadListings() })
+async function loadFromRoute(): Promise<void> {
+  applyRouteState()
+  await loadListings()
+  const listingId = typeof route.params.id === 'string' ? route.params.id : null
+  if (listingId === null) {
+    latestDetailRequest += 1
+    selectedListing.value = null
+
+    return
+  }
+
+  await loadSelectedListing(listingId)
+}
+
+watch(() => route.fullPath, () => { void loadFromRoute() }, { immediate: true })
 </script>
 
 <template>
@@ -196,7 +287,7 @@ onMounted(() => { void loadListings() })
       <BaseButton variant="secondary" :disabled="page >= totalPages || loading" @click="goToPage(page + 1)">Volgende</BaseButton>
     </nav>
 
-    <div v-if="selectedListing" class="modal-backdrop" @click.self="selectedListing = null">
+    <div v-if="selectedListing" class="modal-backdrop" @click.self="closeListing">
       <section class="panel listing-detail" role="dialog" aria-modal="true" aria-labelledby="listing-detail-heading">
         <div class="listing-detail__photos">
           <img v-for="image in selectedListing.images" :key="image.id" :src="image.url" :alt="`${selectedListing.card.name} ${image.side}`">
@@ -224,7 +315,7 @@ onMounted(() => { void loadListings() })
           </li>
         </ul>
         <div class="dialog-actions">
-          <BaseButton variant="secondary" @click="selectedListing = null">Sluiten</BaseButton>
+          <BaseButton variant="secondary" @click="closeListing">Sluiten</BaseButton>
           <BaseButton :disabled="addingListingId === selectedListing.id" @click="addToCart(selectedListing)">
             {{ addingListingId === selectedListing.id ? 'Toevoegen…' : (auth.isAuthenticated ? 'In winkelmand' : 'Inloggen om te kopen') }}
           </BaseButton>

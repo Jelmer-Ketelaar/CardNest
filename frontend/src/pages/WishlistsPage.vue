@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
@@ -8,6 +9,9 @@ import type { PaginatedResponse } from '../types/api'
 import type { CatalogCard } from '../types/catalog'
 import type { WishlistCollectionResponse, WishlistDetail, WishlistItem } from '../types/wishlist'
 import { formatMoney, parseOptionalMinorUnits } from '../utils/money'
+
+const route = useRoute()
+const router = useRouter()
 
 const languages = [
   ['en', 'Engels'], ['nl', 'Nederlands'], ['ja', 'Japans'], ['ko', 'Koreaans'], ['de', 'Duits'],
@@ -23,10 +27,14 @@ const priorities = [
 
 const wishlists = ref<WishlistCollectionResponse['items']>([])
 const activeWishlist = ref<WishlistDetail | null>(null)
+const editingItem = ref<WishlistItem | null>(null)
+const editingVariants = ref<CatalogCard['variants']>([])
+const editingItemLoading = ref<string | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const success = ref('')
+const itemErrors = ref<Record<string, string[]>>({})
 const createName = ref('')
 const editName = ref('')
 const showCompleted = ref(true)
@@ -44,11 +52,22 @@ const itemForm = reactive({
   priority: 'normal',
   notes: '',
 })
+const editItemForm = reactive({
+  language: '',
+  variantId: '',
+  minimumCondition: '',
+  maxPrice: '',
+  desiredQuantity: '1',
+  priority: 'normal',
+  notes: '',
+})
 
 const visibleItems = computed<WishlistItem[]>(() => {
   const items = activeWishlist.value?.items ?? []
   return showCompleted.value ? items : items.filter((item) => !item.completed)
 })
+const routeWishlistId = computed(() => typeof route.params.id === 'string' ? route.params.id : null)
+const isCreatingWishlist = computed(() => route.name === 'wishlist-create')
 
 function caughtMessage(caught: unknown, fallback: string): string {
   return caught instanceof ApiError ? caught.message : fallback
@@ -56,6 +75,10 @@ function caughtMessage(caught: unknown, fallback: string): string {
 
 function readableCode(value: string): string {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function fieldError(errors: Record<string, string[]>, field: string): string | undefined {
+  return errors[field]?.[0]
 }
 
 function syncSummary(wishlist: WishlistDetail): void {
@@ -69,7 +92,11 @@ async function loadWishlists(): Promise<void> {
   try {
     const response = await apiRequest<WishlistCollectionResponse>('/me/wishlists')
     wishlists.value = response.items
-    if (!activeWishlist.value && response.items[0]) await selectWishlist(response.items[0].id)
+    if (routeWishlistId.value !== null) {
+      await loadWishlist(routeWishlistId.value)
+    } else if (!activeWishlist.value && response.items[0] && !isCreatingWishlist.value) {
+      await selectWishlist(response.items[0].id)
+    }
   } catch (caught) {
     error.value = caughtMessage(caught, 'De wishlists konden niet worden geladen.')
   } finally {
@@ -77,7 +104,7 @@ async function loadWishlists(): Promise<void> {
   }
 }
 
-async function selectWishlist(id: string): Promise<void> {
+async function loadWishlist(id: string): Promise<void> {
   error.value = ''
   try {
     activeWishlist.value = await apiRequest<WishlistDetail>(`/me/wishlists/${id}`)
@@ -88,7 +115,16 @@ async function selectWishlist(id: string): Promise<void> {
   }
 }
 
+async function selectWishlist(id: string): Promise<void> {
+  if (saving.value || editingItemLoading.value !== null) return
+
+  await router.push({ name: 'wishlist-detail', params: { id } })
+  if (activeWishlist.value?.id !== id) await loadWishlist(id)
+}
+
 async function createWishlist(): Promise<void> {
+  if (saving.value) return
+
   error.value = ''
   success.value = ''
   saving.value = true
@@ -102,6 +138,7 @@ async function createWishlist(): Promise<void> {
     createName.value = ''
     success.value = 'De wishlist is aangemaakt.'
     await loadWishlists()
+    await router.replace({ name: 'wishlist-detail', params: { id: wishlist.id } })
   } catch (caught) {
     error.value = caughtMessage(caught, 'De wishlist kon niet worden aangemaakt.')
   } finally {
@@ -111,7 +148,7 @@ async function createWishlist(): Promise<void> {
 
 async function renameWishlist(): Promise<void> {
   const wishlist = activeWishlist.value
-  if (!wishlist) return
+  if (!wishlist || saving.value) return
 
   error.value = ''
   saving.value = true
@@ -132,7 +169,7 @@ async function renameWishlist(): Promise<void> {
 
 async function deleteWishlist(): Promise<void> {
   const wishlist = activeWishlist.value
-  if (!wishlist || !window.confirm(`Wishlist “${wishlist.name}” verwijderen?`)) return
+  if (!wishlist || saving.value || !window.confirm(`Wishlist “${wishlist.name}” verwijderen?`)) return
 
   error.value = ''
   saving.value = true
@@ -140,7 +177,12 @@ async function deleteWishlist(): Promise<void> {
     await apiRequest<void>(`/me/wishlists/${wishlist.id}`, { method: 'DELETE' })
     wishlists.value = wishlists.value.filter((candidate) => candidate.id !== wishlist.id)
     activeWishlist.value = null
-    if (wishlists.value[0]) await selectWishlist(wishlists.value[0].id)
+    if (wishlists.value[0]) {
+      await router.replace({ name: 'wishlist-detail', params: { id: wishlists.value[0].id } })
+      await loadWishlist(wishlists.value[0].id)
+    } else {
+      await router.replace({ name: 'wishlists' })
+    }
     success.value = 'De wishlist is verwijderd.'
   } catch (caught) {
     error.value = caughtMessage(caught, 'De wishlist kon niet worden verwijderd.')
@@ -150,6 +192,8 @@ async function deleteWishlist(): Promise<void> {
 }
 
 async function searchCatalog(): Promise<void> {
+  if (searching.value) return
+
   catalogMatches.value = []
   selectedCard.value = null
   if (catalogQuery.value.trim().length < 2) {
@@ -192,7 +236,7 @@ function resetItemForm(): void {
 
 async function addWishlistItem(): Promise<void> {
   const wishlist = activeWishlist.value
-  if (!wishlist || !selectedCard.value) {
+  if (!wishlist || !selectedCard.value || saving.value) {
     error.value = 'Selecteer eerst een cataloguskaart.'
     return
   }
@@ -243,9 +287,100 @@ async function addWishlistItem(): Promise<void> {
   }
 }
 
+async function startEditingItem(item: WishlistItem): Promise<void> {
+  if (saving.value || editingItemLoading.value !== null) return
+
+  error.value = ''
+  itemErrors.value = {}
+  editingItemLoading.value = item.id
+  try {
+    const card = await apiRequest<CatalogCard>(`/cards/${item.card.id}`)
+    editingItem.value = item
+    editingVariants.value = card.variants
+    editItemForm.language = item.language ?? ''
+    editItemForm.variantId = item.variant?.id ?? ''
+    editItemForm.minimumCondition = item.minimumCondition ?? ''
+    editItemForm.maxPrice = item.maxPrice ? String(item.maxPrice.amount) : ''
+    editItemForm.desiredQuantity = String(item.desiredQuantity)
+    editItemForm.priority = item.priority
+    editItemForm.notes = item.notes ?? ''
+  } catch (caught) {
+    error.value = caughtMessage(caught, 'De wishlist-voorkeuren konden niet worden geopend.')
+  } finally {
+    editingItemLoading.value = null
+  }
+}
+
+function cancelEditingItem(): void {
+  editingItem.value = null
+  editingVariants.value = []
+  itemErrors.value = {}
+}
+
+async function updateWishlistItem(): Promise<void> {
+  const wishlist = activeWishlist.value
+  const item = editingItem.value
+  if (!wishlist || !item || saving.value) return
+
+  error.value = ''
+  success.value = ''
+  itemErrors.value = {}
+  const desiredQuantity = Number(editItemForm.desiredQuantity)
+  if (!Number.isInteger(desiredQuantity) || desiredQuantity < 1 || desiredQuantity > 100) {
+    itemErrors.value = { desiredQuantity: ['Het gewenste aantal moet een heel getal tussen 1 en 100 zijn.'] }
+    return
+  }
+
+  let maxPrice: number | null
+  try {
+    maxPrice = parseOptionalMinorUnits(editItemForm.maxPrice)
+  } catch (caught) {
+    itemErrors.value = { maxPrice: [caughtMessage(caught, 'Vul een geldige maximumprijs in centen in.')] }
+    return
+  }
+
+  const payload: Record<string, boolean | number | string> = {
+    desiredQuantity,
+    priority: editItemForm.priority,
+  }
+  if (editItemForm.language) payload.language = editItemForm.language
+  else payload.clearLanguage = true
+  if (editItemForm.variantId) payload.variantId = editItemForm.variantId
+  else payload.clearVariant = true
+  if (editItemForm.minimumCondition) payload.minimumCondition = editItemForm.minimumCondition
+  else payload.clearMinimumCondition = true
+  if (maxPrice === null) payload.clearMaxPrice = true
+  else {
+    payload.maxPrice = maxPrice
+    payload.maxCurrency = 'EUR'
+  }
+  if (editItemForm.notes.trim()) payload.notes = editItemForm.notes.trim()
+  else payload.clearNotes = true
+
+  saving.value = true
+  try {
+    const updated = await apiRequest<WishlistDetail>(
+      `/me/wishlists/${wishlist.id}/items/${item.id}`,
+      { method: 'PATCH', body: JSON.stringify(payload) },
+    )
+    activeWishlist.value = updated
+    syncSummary(updated)
+    cancelEditingItem()
+    success.value = 'De wishlist-voorkeuren zijn bijgewerkt.'
+  } catch (caught) {
+    if (caught instanceof ApiError && Object.keys(caught.details).length > 0) {
+      itemErrors.value = caught.details
+    } else {
+      error.value = caughtMessage(caught, 'De wishlist-voorkeuren konden niet worden bijgewerkt.')
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
 async function deleteItem(item: WishlistItem): Promise<void> {
   const wishlist = activeWishlist.value
-  if (!wishlist) return
+  if (!wishlist || saving.value) return
 
   error.value = ''
   saving.value = true
@@ -263,6 +398,10 @@ async function deleteItem(item: WishlistItem): Promise<void> {
   }
 }
 
+watch(routeWishlistId, (id) => {
+  if (id !== null && activeWishlist.value?.id !== id) void loadWishlist(id)
+})
+
 onMounted(() => { void loadWishlists() })
 </script>
 
@@ -274,6 +413,7 @@ onMounted(() => { void loadWishlists() })
         <h1>Wishlists</h1>
         <p>Leg per kaart je criteria vast. Nieuwe fysieke kaarten werken passende doelen automatisch bij.</p>
       </div>
+      <RouterLink class="button button--primary" :to="{ name: 'wishlist-create' }">Nieuwe wishlist</RouterLink>
     </header>
 
     <ErrorMessage v-if="error" :message="error" />
@@ -281,7 +421,7 @@ onMounted(() => { void loadWishlists() })
 
     <section class="wishlist-workspace">
       <aside class="wishlist-sidebar">
-        <form class="panel" @submit.prevent="createWishlist">
+        <form v-if="isCreatingWishlist || wishlists.length === 0" class="panel" @submit.prevent="createWishlist">
           <p class="eyebrow">Nieuwe lijst</p>
           <h2>Wishlist maken</h2>
           <BaseInput id="wishlist-name" v-model="createName" label="Naam" required />
@@ -292,19 +432,20 @@ onMounted(() => { void loadWishlists() })
           <p class="eyebrow">{{ wishlists.length }} lijsten</p>
           <h2 id="wishlist-list-heading">Mijn wishlists</h2>
           <p v-if="loading" role="status">Wishlists laden…</p>
-          <button
+          <RouterLink
             v-for="wishlist in wishlists"
             :key="wishlist.id"
-            type="button"
+            class="wishlist-list__link"
+            :to="{ name: 'wishlist-detail', params: { id: wishlist.id } }"
             :class="{ active: activeWishlist?.id === wishlist.id }"
-            @click="selectWishlist(wishlist.id)"
+            @click.prevent="selectWishlist(wishlist.id)"
           >
             <strong>{{ wishlist.name }}</strong>
             <span>{{ wishlist.progress.fulfilledQuantity }}/{{ wishlist.progress.desiredQuantity }} gevonden</span>
             <progress :value="wishlist.progress.fulfilledQuantity" :max="wishlist.progress.desiredQuantity || 1">
               {{ wishlist.progress.percentage }}%
             </progress>
-          </button>
+          </RouterLink>
         </section>
       </aside>
 
@@ -422,17 +563,106 @@ onMounted(() => { void loadWishlists() })
                 </div>
                 <strong>{{ item.remainingQuantity }} ontbreekt</strong>
               </div>
-              <dl>
-                <div><dt>Taal</dt><dd>{{ item.language ? readableCode(item.language) : 'Iedere taal' }}</dd></div>
-                <div><dt>Variant</dt><dd>{{ item.variant ? readableCode(item.variant.code) : 'Iedere variant' }}</dd></div>
-                <div><dt>Min. conditie</dt><dd>{{ item.minimumCondition ? readableCode(item.minimumCondition) : 'Geen minimum' }}</dd></div>
-                <div><dt>Maximum</dt><dd>{{ item.maxPrice ? formatMoney(item.maxPrice.amount, item.maxPrice.currency) : 'Geen maximum' }}</dd></div>
-              </dl>
-              <p v-if="item.notes">{{ item.notes }}</p>
-              <progress :value="item.fulfilledQuantity" :max="item.desiredQuantity">
-                {{ item.fulfilledQuantity }}/{{ item.desiredQuantity }}
-              </progress>
-              <BaseButton variant="danger" :disabled="saving" @click="deleteItem(item)">Verwijderen</BaseButton>
+              <form
+                v-if="editingItem?.id === item.id"
+                class="wishlist-item-edit-form"
+                @submit.prevent="updateWishlistItem"
+              >
+                <label class="field">
+                  <span>Gewenste taal</span>
+                  <select :id="'edit-wishlist-language-' + item.id" v-model="editItemForm.language">
+                    <option value="">Iedere taal</option>
+                    <option v-for="language in languages" :key="language[0]" :value="language[0]">{{ language[1] }}</option>
+                  </select>
+                  <span v-if="fieldError(itemErrors, 'language')" class="field-error">
+                    {{ fieldError(itemErrors, 'language') }}
+                  </span>
+                </label>
+                <label class="field">
+                  <span>Gewenste variant</span>
+                  <select :id="'edit-wishlist-variant-' + item.id" v-model="editItemForm.variantId">
+                    <option value="">Iedere variant</option>
+                    <option v-for="variant in editingVariants" :key="variant.id" :value="variant.id">
+                      {{ readableCode(variant.code) }}
+                    </option>
+                  </select>
+                  <span v-if="fieldError(itemErrors, 'variantId')" class="field-error">
+                    {{ fieldError(itemErrors, 'variantId') }}
+                  </span>
+                </label>
+                <label class="field">
+                  <span>Minimale conditie</span>
+                  <select :id="'edit-wishlist-condition-' + item.id" v-model="editItemForm.minimumCondition">
+                    <option value="">Iedere conditie</option>
+                    <option v-for="condition in conditions" :key="condition[0]" :value="condition[0]">{{ condition[1] }}</option>
+                  </select>
+                  <span v-if="fieldError(itemErrors, 'minimumCondition')" class="field-error">
+                    {{ fieldError(itemErrors, 'minimumCondition') }}
+                  </span>
+                </label>
+                <BaseInput
+                  :id="'edit-wishlist-max-price-' + item.id"
+                  v-model="editItemForm.maxPrice"
+                  label="Maximumprijs (centen)"
+                  type="number"
+                  min="0"
+                  :error="fieldError(itemErrors, 'maxPrice')"
+                />
+                <BaseInput
+                  :id="'edit-wishlist-quantity-' + item.id"
+                  v-model="editItemForm.desiredQuantity"
+                  label="Gewenst aantal"
+                  type="number"
+                  min="1"
+                  max="100"
+                  required
+                  :error="fieldError(itemErrors, 'desiredQuantity')"
+                />
+                <label class="field">
+                  <span>Prioriteit</span>
+                  <select :id="'edit-wishlist-priority-' + item.id" v-model="editItemForm.priority">
+                    <option v-for="priority in priorities" :key="priority[0]" :value="priority[0]">{{ priority[1] }}</option>
+                  </select>
+                  <span v-if="fieldError(itemErrors, 'priority')" class="field-error">
+                    {{ fieldError(itemErrors, 'priority') }}
+                  </span>
+                </label>
+                <label class="field wishlist-notes">
+                  <span>Opmerking</span>
+                  <textarea :id="'edit-wishlist-notes-' + item.id" v-model="editItemForm.notes" rows="3" maxlength="2000" />
+                  <span v-if="fieldError(itemErrors, 'notes')" class="field-error">
+                    {{ fieldError(itemErrors, 'notes') }}
+                  </span>
+                </label>
+                <div class="wishlist-item-edit-form__actions">
+                  <BaseButton type="submit" :disabled="saving">Voorkeuren opslaan</BaseButton>
+                  <BaseButton type="button" variant="secondary" :disabled="saving" @click="cancelEditingItem">
+                    Annuleren
+                  </BaseButton>
+                </div>
+              </form>
+              <template v-else>
+                <dl>
+                  <div><dt>Taal</dt><dd>{{ item.language ? readableCode(item.language) : 'Iedere taal' }}</dd></div>
+                  <div><dt>Variant</dt><dd>{{ item.variant ? readableCode(item.variant.code) : 'Iedere variant' }}</dd></div>
+                  <div><dt>Min. conditie</dt><dd>{{ item.minimumCondition ? readableCode(item.minimumCondition) : 'Geen minimum' }}</dd></div>
+                  <div><dt>Maximum</dt><dd>{{ item.maxPrice ? formatMoney(item.maxPrice.amount, item.maxPrice.currency) : 'Geen maximum' }}</dd></div>
+                </dl>
+                <p v-if="item.notes">{{ item.notes }}</p>
+                <progress :value="item.fulfilledQuantity" :max="item.desiredQuantity">
+                  {{ item.fulfilledQuantity }}/{{ item.desiredQuantity }}
+                </progress>
+                <div class="wishlist-item-actions">
+                  <BaseButton
+                    variant="secondary"
+                    :disabled="saving || editingItemLoading !== null"
+                    @click="startEditingItem(item)"
+                  >
+                    Voorkeuren bewerken
+                  </BaseButton>
+                  <BaseButton variant="danger" :disabled="saving" @click="deleteItem(item)">Verwijderen</BaseButton>
+                </div>
+              </template>
             </div>
           </article>
         </section>
