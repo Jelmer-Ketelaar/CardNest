@@ -141,6 +141,7 @@ function mountPage(): MountedPage {
   const root = document.createElement('div')
   document.body.append(root)
   const app = createApp(CatalogSetsPage)
+  app.component('RouterLink', { template: '<a><slot /></a>' })
   app.mount(root)
   const page = { app, root }
   mountedPages.push(page)

@@ -106,6 +106,9 @@ watch(currentPage, (page) => { void loadSets(page) }, { immediate: true })
               <div><dt>Status</dt><dd>{{ readableStatus(set.status) }}</dd></div>
               <div><dt>Releasedatum</dt><dd>{{ set.releaseDate ?? 'Onbekend' }}</dd></div>
             </dl>
+            <RouterLink class="button button--secondary" :to="{ name: 'catalog-set', params: { id: set.id } }">
+              Bekijk set
+            </RouterLink>
           </div>
         </article>
       </section>
