@@ -20,6 +20,7 @@ async function logout(): Promise<void> {
     <header class="site-header">
       <RouterLink class="brand" :to="{ name: auth.isAuthenticated ? 'dashboard' : 'marketplace' }">CardNest</RouterLink>
       <nav aria-label="Hoofdnavigatie">
+        <RouterLink :to="{ name: 'catalog-sets' }">Catalogus</RouterLink>
         <RouterLink :to="{ name: 'marketplace' }">Marktplaats</RouterLink>
         <template v-if="auth.isAuthenticated">
           <RouterLink :to="{ name: 'dashboard' }">Dashboard</RouterLink>
