@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AccountPage from '../pages/AccountPage.vue'
 import DashboardPage from '../pages/DashboardPage.vue'
+import HealthPage from '../pages/HealthPage.vue'
 import CollectionPage from '../pages/CollectionPage.vue'
 import BindersPage from '../pages/BindersPage.vue'
 import CartPage from '../pages/CartPage.vue'
@@ -21,6 +22,7 @@ export const router = createRouter({
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/register', name: 'register', component: RegistrationPage },
     { path: '/verify-email', name: 'verify-email', component: VerifyEmailPage },
+    { path: '/health', name: 'health', component: HealthPage },
     { path: '/marketplace', name: 'marketplace', component: MarketplacePage },
     { path: '/users/:id', name: 'user-profile', component: UserProfilePage },
     { path: '/account', name: 'account', component: AccountPage, meta: { requiresAuth: true } },
