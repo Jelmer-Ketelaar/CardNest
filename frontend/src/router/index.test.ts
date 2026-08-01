@@ -28,4 +28,12 @@ describe('router authentication guard', () => {
     // Assert
     expect(router.currentRoute.value.name).toBe('health')
   })
+
+  it('allows an unauthenticated visitor to browse catalog sets', async () => {
+    // Act
+    await router.push({ name: 'catalog-sets' })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('catalog-sets')
+  })
 })

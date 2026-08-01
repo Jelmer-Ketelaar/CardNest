@@ -5,6 +5,7 @@ import HealthPage from '../pages/HealthPage.vue'
 import CollectionPage from '../pages/CollectionPage.vue'
 import BindersPage from '../pages/BindersPage.vue'
 import CartPage from '../pages/CartPage.vue'
+import CatalogSetsPage from '../pages/CatalogSetsPage.vue'
 import LoginPage from '../pages/LoginPage.vue'
 import MarketplacePage from '../pages/MarketplacePage.vue'
 import MyListingsPage from '../pages/MyListingsPage.vue'
@@ -23,6 +24,7 @@ export const router = createRouter({
     { path: '/register', name: 'register', component: RegistrationPage },
     { path: '/verify-email', name: 'verify-email', component: VerifyEmailPage },
     { path: '/health', name: 'health', component: HealthPage },
+    { path: '/catalog/sets', name: 'catalog-sets', component: CatalogSetsPage },
     { path: '/marketplace', name: 'marketplace', component: MarketplacePage },
     { path: '/users/:id', name: 'user-profile', component: UserProfilePage },
     { path: '/account', name: 'account', component: AccountPage, meta: { requiresAuth: true } },
