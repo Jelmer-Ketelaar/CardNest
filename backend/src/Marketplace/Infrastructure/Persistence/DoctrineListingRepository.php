@@ -118,6 +118,11 @@ final readonly class DoctrineListingRepository implements ListingRepository
 
     public function lockForCheckout(array $ids): array
     {
+        return $this->lockByIds($ids);
+    }
+
+    public function lockByIds(array $ids): array
+    {
         sort($ids);
         $listings = [];
         foreach (array_values(array_unique($ids)) as $id) {

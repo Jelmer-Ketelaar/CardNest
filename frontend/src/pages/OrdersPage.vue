@@ -25,7 +25,9 @@ const orders = ref<Order[]>([])
 const loading = ref(false)
 const updatingOrderId = ref<string | null>(null)
 const importingItemId = ref<string | null>(null)
+const cancellingOrderId = ref<string | null>(null)
 const importTarget = ref<{ order: Order; item: OrderItem } | null>(null)
+const cancelTarget = ref<Order | null>(null)
 const reviewTarget = ref<Order | null>(null)
 const submittingReview = ref(false)
 const reviewedOrderIds = ref<Set<string>>(new Set())
@@ -33,6 +35,8 @@ const storageLocations = ref<StorageLocation[]>([])
 const storageLoaded = ref(false)
 const error = ref('')
 const success = ref('')
+const cancellationError = ref('')
+const cancellationReason = ref('')
 const importForm = reactive({ language: 'en', condition: 'near_mint', storageLocationId: '', notes: '' })
 const reviewForm = reactive({
   overallScore: 5,
@@ -95,6 +99,68 @@ async function loadOrders(): Promise<void> {
 
 function canReview(order: Order): boolean {
   return order.status === 'completed' && !reviewedOrderIds.value.has(order.id)
+}
+
+function openCancellation(order: Order): void {
+  cancelTarget.value = order
+  cancellationReason.value = ''
+  cancellationError.value = ''
+}
+
+function closeCancellation(): void {
+  if (cancellingOrderId.value !== null) return
+
+  cancelTarget.value = null
+  cancellationError.value = ''
+}
+
+function cancellationReasonError(reason: string): string | null {
+  const normalized = reason.trim()
+  if (!normalized) return 'Vul een annuleringsreden in.'
+  if (normalized.length < 3) return 'De annuleringsreden moet minimaal 3 tekens bevatten.'
+  if (normalized.length > 500) return 'De annuleringsreden mag maximaal 500 tekens bevatten.'
+
+  return null
+}
+
+function cancellationFailureMessage(caught: unknown): string {
+  if (!(caught instanceof ApiError)) return 'De order kon niet worden geannuleerd. Controleer je verbinding en probeer opnieuw.'
+  if (caught.status === 409) return 'Deze order is inmiddels verzonden of al afgehandeld. Vernieuw de pagina voor de actuele status.'
+  if (caught.code === 'refund_failed') return 'De terugbetaling kon niet worden verwerkt. Er is niets aan de order gewijzigd; probeer opnieuw.'
+
+  return caught.message
+}
+
+async function submitCancellation(): Promise<void> {
+  const target = cancelTarget.value
+  if (!target || cancellingOrderId.value !== null) return
+
+  const validationError = cancellationReasonError(cancellationReason.value)
+  if (validationError) {
+    cancellationError.value = validationError
+
+    return
+  }
+
+  cancellingOrderId.value = target.id
+  cancellationError.value = ''
+  error.value = ''
+  success.value = ''
+  try {
+    const updated = await apiRequest<Order>(`/me/orders/${target.id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: cancellationReason.value.trim() }),
+    })
+    orders.value = orders.value.map((current) => current.id === updated.id ? updated : current)
+    success.value = updated.status === 'refunded'
+      ? `Order geannuleerd en ${formatMoney(updated.costs.total.amount, updated.costs.total.currency)} terugbetaald.`
+      : 'Order geannuleerd.'
+    cancelTarget.value = null
+  } catch (caught) {
+    cancellationError.value = cancellationFailureMessage(caught)
+  } finally {
+    cancellingOrderId.value = null
+  }
 }
 
 function openReview(order: Order): void {
@@ -247,9 +313,17 @@ onMounted(() => { void loadOrders() })
         </header>
 
         <div
-          v-if="order.availableActions.markShipped || order.availableActions.confirmReceived || order.status === 'completed'"
+          v-if="order.availableActions.cancel || order.availableActions.markShipped || order.availableActions.confirmReceived || order.status === 'completed'"
           class="order-card__actions"
         >
+          <BaseButton
+            v-if="order.availableActions.cancel"
+            variant="danger"
+            :disabled="cancellingOrderId === order.id"
+            @click="openCancellation(order)"
+          >
+            Bestelling annuleren
+          </BaseButton>
           <BaseButton
             v-if="order.availableActions.markShipped"
             :disabled="updatingOrderId === order.id"
@@ -314,6 +388,16 @@ onMounted(() => { void loadOrders() })
             <p>{{ order.payment.provider === 'fake' ? 'Nep-betaalprovider' : order.payment.provider }} · {{ paymentStatusLabel(order.payment.status) }}</p>
             <small v-if="order.payment.providerReference">Referentie {{ order.payment.providerReference }}</small>
           </div>
+          <div v-if="order.cancellation">
+            <h3>Annulering</h3>
+            <p>{{ order.cancellation.reason }}</p>
+            <small>{{ formattedDate(order.cancellation.cancelledAt) }}</small>
+          </div>
+          <div v-if="order.refund">
+            <h3>Terugbetaling</h3>
+            <p>{{ order.refund.status === 'succeeded' ? 'Geslaagd' : readableCode(order.refund.status) }}</p>
+            <strong>{{ formatMoney(order.refund.amount.amount, order.refund.amount.currency) }}</strong>
+          </div>
         </div>
 
         <ol class="order-timeline" aria-label="Orderstatusgeschiedenis">
@@ -324,6 +408,44 @@ onMounted(() => { void loadOrders() })
         </ol>
       </article>
     </section>
+
+    <div v-if="cancelTarget" class="modal-backdrop" @click.self="closeCancellation">
+      <section class="panel edit-panel cancellation-panel" role="dialog" aria-modal="true" aria-labelledby="cancellation-heading">
+        <p class="eyebrow">Order annuleren</p>
+        <h2 id="cancellation-heading">Bestelling annuleren</h2>
+        <p v-if="cancelTarget.status === 'paid'">
+          Hiermee annuleer je de order en wordt {{ formatMoney(cancelTarget.costs.total.amount, cancelTarget.costs.total.currency) }}
+          terugbetaald aan de koper. De oorspronkelijke listing wordt niet opnieuw gepubliceerd.
+        </p>
+        <p v-else>
+          Hiermee annuleer je de order. Er is nog geen geslaagde betaling, dus er wordt geen terugbetaling verwerkt.
+          De oorspronkelijke listing wordt niet opnieuw gepubliceerd.
+        </p>
+        <p>Verzonden orders kunnen niet worden geannuleerd.</p>
+        <ErrorMessage v-if="cancellationError" :message="cancellationError" />
+        <form class="edit-form" novalidate @submit.prevent="submitCancellation">
+          <label class="field" for="cancellation-reason">
+            <span>Annuleringsreden</span>
+            <textarea
+              id="cancellation-reason"
+              v-model="cancellationReason"
+              rows="4"
+              maxlength="500"
+              required
+              :disabled="cancellingOrderId === cancelTarget.id"
+            />
+          </label>
+          <div class="dialog-actions">
+            <BaseButton variant="secondary" :disabled="cancellingOrderId === cancelTarget.id" @click="closeCancellation">
+              Order behouden
+            </BaseButton>
+            <BaseButton type="submit" variant="danger" :disabled="cancellingOrderId === cancelTarget.id">
+              {{ cancellingOrderId === cancelTarget.id ? 'Annuleren…' : 'Annuleren en terugbetalen' }}
+            </BaseButton>
+          </div>
+        </form>
+      </section>
+    </div>
 
     <div v-if="importTarget" class="modal-backdrop" @click.self="closeCollectionImport">
       <section class="panel edit-panel order-import-panel" role="dialog" aria-modal="true" aria-labelledby="import-heading">

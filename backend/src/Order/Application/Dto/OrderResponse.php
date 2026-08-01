@@ -9,6 +9,8 @@ use App\Order\Domain\Entity\Order;
 use App\Order\Domain\Entity\OrderItem;
 use App\Order\Domain\Entity\OrderStatus;
 use App\Order\Domain\Entity\OrderStatusHistory;
+use App\Payment\Domain\Entity\Refund;
+use DateTimeImmutable;
 
 final readonly class OrderResponse
 {
@@ -54,6 +56,8 @@ final readonly class OrderResponse
                 'provider' => $payment->getProviderName(),
                 'providerReference' => $payment->getProviderReference(),
             ],
+            'cancellation' => $this->cancellation(),
+            'refund' => $this->refund(),
             'statusHistory' => array_map(
                 static fn (OrderStatusHistory $history): array => [
                     'id' => $history->getId()->toRfc4122(),
@@ -65,6 +69,7 @@ final readonly class OrderResponse
                 $this->order->getStatusHistory()->toArray(),
             ),
             'availableActions' => [
+                'cancel' => $this->canCancel(),
                 'markShipped' => $this->canSeller(OrderStatus::Paid),
                 'confirmReceived' => $this->canBuyer(OrderStatus::Shipped),
             ],
@@ -118,6 +123,45 @@ final readonly class OrderResponse
         return $this->participant instanceof User
             && $this->order->getStatus() === $status
             && $this->participant->getId()->equals($this->order->getSeller()->getId());
+    }
+
+    /** @return array{reason: string, cancelledBy: array{id: string}, cancelledAt: string}|null */
+    private function cancellation(): ?array
+    {
+        $cancelledBy = $this->order->getCancelledBy();
+        $reason = $this->order->getCancellationReason();
+        $cancelledAt = $this->order->getCancelledAt();
+        if (!$cancelledBy instanceof User || $reason === null || !$cancelledAt instanceof DateTimeImmutable) {
+            return null;
+        }
+
+        return [
+            'reason' => $reason,
+            'cancelledBy' => ['id' => $cancelledBy->getId()->toRfc4122()],
+            'cancelledAt' => $cancelledAt->format(DATE_ATOM),
+        ];
+    }
+
+    /** @return array{status: string, amount: array{amount: int, currency: string}}|null */
+    private function refund(): ?array
+    {
+        $refund = $this->order->getRefund();
+        if (!$refund instanceof Refund) {
+            return null;
+        }
+
+        return [
+            'status' => $refund->getStatus()->value,
+            'amount' => $refund->getAmount()->toArray(),
+        ];
+    }
+
+    private function canCancel(): bool
+    {
+        return $this->participant instanceof User
+            && in_array($this->order->getStatus(), [OrderStatus::PendingPayment, OrderStatus::Paid], true)
+            && ($this->participant->getId()->equals($this->order->getBuyer()->getId())
+                || $this->participant->getId()->equals($this->order->getSeller()->getId()));
     }
 
     private function canBuyer(OrderStatus $status): bool

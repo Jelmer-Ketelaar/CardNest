@@ -16,6 +16,7 @@ use App\Collection\Domain\Repository\CollectionItemSearchResult;
 use App\Identity\Domain\Entity\User;
 use App\Shared\Domain\ValueObject\Money;
 use Doctrine\DBAL\ArrayParameterType;
+use Doctrine\DBAL\LockMode;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -71,6 +72,18 @@ final readonly class DoctrineCollectionItemRepository implements CollectionItemR
             ->getOneOrNullResult();
 
         return $item;
+    }
+
+    public function lockMany(array $items): void
+    {
+        usort(
+            $items,
+            static fn (CollectionItem $left, CollectionItem $right): int => $left->getId()->toRfc4122()
+                <=> $right->getId()->toRfc4122(),
+        );
+        foreach ($items as $item) {
+            $this->entityManager->lock($item, LockMode::PESSIMISTIC_WRITE);
+        }
     }
 
     public function saveMany(array $items): void

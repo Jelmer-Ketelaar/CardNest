@@ -19,6 +19,9 @@ interface CollectionItemRepository
     public function getForOwner(string $id, User $owner): ?CollectionItem;
 
     /** @param list<CollectionItem> $items */
+    public function lockMany(array $items): void;
+
+    /** @param list<CollectionItem> $items */
     public function saveMany(array $items): void;
 
     public function save(CollectionItem $item): void;

@@ -10,8 +10,10 @@ use App\Marketplace\Domain\Entity\ListingStatus;
 use App\Marketplace\Domain\Entity\ShippingMethodCode;
 use App\Order\Domain\Exception\InvalidOrder;
 use App\Order\Domain\Exception\InvalidOrderTransition;
+use App\Order\Domain\ValueObject\CancellationReason;
 use App\Order\Domain\ValueObject\ShippingAddress;
 use App\Payment\Domain\Entity\Payment;
+use App\Payment\Domain\Entity\Refund;
 use App\Shared\Domain\ValueObject\Money;
 use DateTimeImmutable;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -45,11 +47,24 @@ final class Order
     #[ORM\OneToOne(mappedBy: 'order', targetEntity: OrderAddress::class, cascade: ['persist'])]
     private OrderAddress $shippingAddress;
 
+    #[ORM\OneToOne(mappedBy: 'order', targetEntity: Refund::class)]
+    private ?Refund $refund = null;
+
     #[ORM\Column(name: 'paid_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $paidAt = null;
 
     #[ORM\Column(name: 'completed_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $completedAt = null;
+
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'cancelled_by_id', nullable: true, onDelete: 'RESTRICT')]
+    private ?User $cancelledBy = null;
+
+    #[ORM\Column(name: 'cancellation_reason', type: Types::TEXT, nullable: true)]
+    private ?string $cancellationReason = null;
+
+    #[ORM\Column(name: 'cancelled_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?DateTimeImmutable $cancelledAt = null;
 
     #[ORM\Column(name: 'updated_at', type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $updatedAt;
@@ -229,6 +244,59 @@ final class Order
     public function getCompletedAt(): ?DateTimeImmutable
     {
         return $this->completedAt;
+    }
+
+    public function recordCancellation(
+        User $actor,
+        CancellationReason $reason,
+        DateTimeImmutable $cancelledAt = new DateTimeImmutable(),
+    ): void {
+        if ($this->status !== OrderStatus::Cancelled) {
+            throw new InvalidOrderTransition('Annuleringsgegevens kunnen alleen bij een geannuleerde order worden vastgelegd.');
+        }
+        if ($this->cancelledBy instanceof User || $this->cancelledAt instanceof DateTimeImmutable) {
+            throw new InvalidOrderTransition('De order is al geannuleerd.');
+        }
+        if (!$actor->getId()->equals($this->buyer->getId()) && !$actor->getId()->equals($this->seller->getId())) {
+            throw new InvalidOrderTransition('Alleen een orderdeelnemer kan een order annuleren.');
+        }
+
+        $this->cancelledBy = $actor;
+        $this->cancellationReason = $reason->value;
+        $this->cancelledAt = $cancelledAt;
+        $this->updatedAt = $cancelledAt;
+    }
+
+    public function getCancelledBy(): ?User
+    {
+        return $this->cancelledBy;
+    }
+
+    public function getCancellationReason(): ?string
+    {
+        return $this->cancellationReason;
+    }
+
+    public function getCancelledAt(): ?DateTimeImmutable
+    {
+        return $this->cancelledAt;
+    }
+
+    public function recordRefund(Refund $refund): void
+    {
+        if (!$refund->getOrder()->getId()->equals($this->id)) {
+            throw new InvalidOrder('Een refund moet aan deze order gekoppeld zijn.');
+        }
+        if ($this->refund instanceof Refund) {
+            throw new InvalidOrder('Een order kan maar één volledige refund hebben.');
+        }
+
+        $this->refund = $refund;
+    }
+
+    public function getRefund(): ?Refund
+    {
+        return $this->refund;
     }
 
     public function recordStatusTransition(

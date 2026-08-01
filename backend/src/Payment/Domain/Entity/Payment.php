@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Payment\Domain\Entity;
 
 use App\Identity\Domain\Entity\User;
+use App\Order\Domain\Entity\Order;
 use App\Payment\Domain\Exception\InvalidPayment;
 use App\Payment\Domain\Provider\PaymentResult;
 use App\Shared\Domain\ValueObject\Money;
@@ -149,6 +150,66 @@ final class Payment
 
         $this->completedAt = $now;
         $this->updatedAt = $now;
+    }
+
+    public function recordSuccessfulRefund(Refund $refund, DateTimeImmutable $processedAt = new DateTimeImmutable()): void
+    {
+        if ($this->status !== PaymentStatus::Succeeded) {
+            throw new InvalidPayment('Alleen een geslaagde betaling kan worden terugbetaald.');
+        }
+        if (!$refund->getPayment()->getId()->equals($this->id)) {
+            throw new InvalidPayment('De refund hoort niet bij deze betaling.');
+        }
+        if ($refund->getStatus() !== RefundStatus::Succeeded) {
+            throw new InvalidPayment('Alleen een geslaagde refund kan als betaaltransactie worden vastgelegd.');
+        }
+        if ($refund->getAmount()->currency !== $this->currency) {
+            throw new InvalidPayment('De refundvaluta moet overeenkomen met de betaling.');
+        }
+
+        $refundedAmount = 0;
+        foreach ($this->transactions as $transaction) {
+            if ($transaction->getType() !== PaymentTransactionType::Refund
+                || $transaction->getStatus() !== PaymentTransactionStatus::Succeeded) {
+                continue;
+            }
+            $relatedOrder = $transaction->getRelatedOrder();
+            if ($relatedOrder instanceof Order
+                && $relatedOrder->getId()->equals($refund->getOrder()->getId())) {
+                throw new InvalidPayment('Deze order heeft al een refundtransactie.');
+            }
+            $refundedAmount += $transaction->getAmount()->amount;
+        }
+        if ($refundedAmount + $refund->getAmount()->amount > $this->amount) {
+            throw new InvalidPayment('Refunds mogen het betaalde bedrag niet overschrijden.');
+        }
+
+        $providerReference = $refund->getProviderReference();
+        if ($providerReference === null) {
+            throw new InvalidPayment('Een geslaagde refund vereist een providerreferentie.');
+        }
+
+        $this->transactions->add(new PaymentTransaction(
+            payment: $this,
+            type: PaymentTransactionType::Refund,
+            status: PaymentTransactionStatus::Succeeded,
+            amount: $refund->getAmount()->amount,
+            currency: $refund->getAmount()->currency,
+            providerReference: $providerReference,
+            createdAt: $processedAt,
+            relatedOrder: $refund->getOrder(),
+        ));
+        $this->updatedAt = $processedAt;
+    }
+
+    public function markFullyRefunded(DateTimeImmutable $refundedAt = new DateTimeImmutable()): void
+    {
+        if ($this->status !== PaymentStatus::Succeeded) {
+            throw new InvalidPayment('Alleen een geslaagde betaling kan volledig zijn terugbetaald.');
+        }
+
+        $this->status = PaymentStatus::Refunded;
+        $this->updatedAt = $refundedAt;
     }
 
     public function getCompletedAt(): ?DateTimeImmutable

@@ -79,6 +79,9 @@ services:
     App\Payment\Domain\Repository\PaymentRepository:
         alias: App\Payment\Infrastructure\Persistence\DoctrinePaymentRepository
 
+    App\Payment\Domain\Repository\RefundRepository:
+        alias: App\Payment\Infrastructure\Persistence\DoctrineRefundRepository
+
     App\Payment\Domain\Provider\PaymentProvider:
         alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
 
@@ -93,3 +96,8 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+when@test:
+    services:
+        App\Payment\Infrastructure\Provider\FakePaymentProvider:
+            public: true

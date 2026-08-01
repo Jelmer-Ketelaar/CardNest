@@ -9,4 +9,6 @@ use App\Payment\Domain\Entity\Payment;
 interface PaymentRepository
 {
     public function add(Payment $payment): void;
+
+    public function lock(Payment $payment): void;
 }

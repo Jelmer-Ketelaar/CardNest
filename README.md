@@ -131,6 +131,13 @@ CardNest is implemented incrementally, one module at a time. This is the current
   asks for or stores card or bank details
 - Keep completed reservation and payment-transaction records for traceability, and expose only orders in which the
   caller is the buyer or seller
+- Let either order participant cancel a `pending_payment` or unshipped `paid` order with a required, stored reason;
+  every cancellation is protected by an owner-safe `404`, an order lock, and immutable status history
+- Refund a paid order for its immutable order total only. A `Refund` and immutable refund payment transaction are
+  linked to that seller order, so a shared checkout payment remains `succeeded` while any funded order is paid or
+  completed
+- Cancel the sold listing without republishing it and return its seller-owned physical item to `in_collection` when
+  cancellation and its fake-provider refund succeed together
 - Let only the seller move a paid order to `shipped` and only the buyer confirm receipt; each command locks the
   order and validates the Symfony Workflow transition inside one database transaction
 - Keep an immutable actor-stamped order-status history plus a one-per-order shipment record with shipped and
@@ -173,8 +180,10 @@ The full HTTP contract is documented in [docs/api.md](docs/api.md).
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
 its own module, in roughly this order:
 
-- **Cancellations and refunds** — add reversible post-payment failure paths separately from successful fulfillment
-- **Notification, Pricing, Moderation, Reporting** — supporting modules around the marketplace
+- **Notification** — delivery updates and other transactional alerts
+- **Pricing, Moderation, Reporting** — supporting modules around the marketplace
+- **Disputes for shipped or completed orders, a real payment provider, partial item refunds, and chargebacks** —
+  financial and operational paths beyond the synchronous fake-provider cancellation flow
   (alerts, price history, fraud signals, financial reporting, ...)
 
 Trading, real payments, auctions, price negotiation, automated card scanning, grading submissions, sealed products,
@@ -220,7 +229,7 @@ flowchart TD
     Wishlist[Wishlist: wanted cards and fulfillment]
     Marketplace[Marketplace: fixed-price listings]
     Order[Order: cart, reservations, seller orders]
-    Payment[Payment: provider-neutral payments]
+    Payment[Payment: provider-neutral payments and refunds]
     Shipping[Shipping: dispatch and receipt confirmation]
     Review[Review: transaction feedback and reputation]
     Shared[Shared: Money, JSON error handling]
@@ -253,6 +262,7 @@ flowchart TD
     Review --> Order
     Review --> Identity
     Payment --> Identity
+    Payment --> Order
     Payment --> Shared
     Catalog --> Shared
     Collection --> Shared

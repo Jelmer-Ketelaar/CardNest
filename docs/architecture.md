@@ -72,7 +72,7 @@ flowchart TD
     Wishlist[Wishlist: wanted cards and progress]
     Marketplace[Marketplace: fixed-price listings]
     Order[Order: cart and seller orders]
-    Payment[Payment: provider-neutral charges]
+    Payment[Payment: provider-neutral charges and refunds]
     Shipping[Shipping: dispatch and receipt confirmation]
     Review[Review: transaction feedback and reputation]
     Shared[Shared: Money, JSON error handling]
@@ -105,6 +105,7 @@ flowchart TD
     Review --> Order
     Review --> Identity
     Payment --> Identity
+    Payment --> Order
     Payment --> Shared
     Catalog --> Shared
     Collection --> Shared
@@ -120,8 +121,8 @@ flowchart TD
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
 | `Wishlist` | `wishlists`, `wishlist_items` | `Catalog` (wanted card/variant), `Collection` (matching physical items), `Identity` (owner), `Shared` (`Money`) |
 | `Marketplace` | `listings`, `listing_images`, `listing_shipping_methods`, `listing_price_history`, `listing_reservations` | `Collection` (physical item), `Identity` (seller/buyer), `Shared` (`Money`) |
-| `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses`, `order_status_history`; one-time buyer collection import | `Marketplace` (listing/reservation), `Payment`, `Collection` (buyer item/wishlist hook), `Storage` (optional placement), `Identity`, `Shared` |
-| `Payment` | `payments`, `payment_transactions`; the `PaymentProvider` port and fake adapter | `Identity` (buyer), `Shared` (`Money`) |
+| `Order` | `shopping_carts`, `shopping_cart_items`, `orders`, `order_items`, `order_addresses`, `order_status_history`, cancellation metadata; one-time buyer collection import | `Marketplace` (listing/reservation), `Payment`, `Collection` (buyer item/wishlist hook), `Storage` (optional placement), `Identity`, `Shared` |
+| `Payment` | `payments`, `refunds`, `payment_transactions`; the `PaymentProvider` port and fake adapter | `Order` (per-order refund reference), `Identity` (buyer/requester), `Shared` (`Money`) |
 | `Shipping` | `shipments`; seller dispatch, buyer receipt confirmation, and sold-item archival | `Order`, `Collection`, `Storage`, `Identity`, `Shared` |
 | `Review` | `reviews`; participant feedback and public aggregate reputation | `Order` (completed transaction), `Identity` (reviewer and reviewed user) |
 | `Shared` | cross-cutting value objects, transaction port, and the API exception handler | — |
@@ -228,6 +229,52 @@ idempotent callback/outbox increment rather than holding a database transaction 
 Cart delivery quotes are server-owned. For one seller, only methods supported by every listing are returned, and
 the group price is the maximum configured per-listing amount for that method. The browser submits seller UUID →
 method mappings, but checkout recalculates them and rejects missing, extra, or stale choices.
+
+## Example flow: cancelling and refunding a seller order
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant API as Order API
+    participant CancelOrder
+    participant OrderRepository
+    participant PaymentProvider
+    participant RefundRepository
+    participant CollectionRepository
+    participant DB as PostgreSQL
+
+    User->>API: POST /me/orders/{id}/cancel { reason }
+    API->>CancelOrder: cancel(participant, orderId, reason)
+    CancelOrder->>DB: BEGIN
+    CancelOrder->>OrderRepository: load participant order with write lock
+    CancelOrder->>CancelOrder: validate participant, reason, and workflow
+    CancelOrder->>CollectionRepository: lock sold listing items
+    alt paid order
+        CancelOrder->>PaymentProvider: refund(order total, refund-order-{orderUuid})
+        PaymentProvider-->>CancelOrder: succeeded(provider reference)
+        CancelOrder->>RefundRepository: persist per-order Refund
+        CancelOrder->>CancelOrder: paid → cancelled → refunded
+    else pending payment
+        CancelOrder->>CancelOrder: pending_payment → cancelled
+    end
+    CancelOrder->>CollectionRepository: listing cancelled; item in_collection
+    CancelOrder->>DB: status history + refund transaction + COMMIT
+    CancelOrder-->>API: updated order DTO
+    API-->>User: 200 OK
+```
+
+One `Payment` can fund several seller orders. `Refund` is deliberately linked to both its `Payment` and exactly one
+`Order`, and its amount must equal that order's immutable total. A successful refund adds an immutable refund
+`PaymentTransaction` with the same related order. The shared payment stays `succeeded` while any funded order
+remains paid or completed and changes to `refunded` only after every paid order has been refunded.
+
+`CancelOrder` locks the participant-scoped order before evaluating the workflow, so cancellation and
+`MarkOrderShipped` serialize and only one can succeed. It also locks the shared payment while calculating its final
+status. PostgreSQL's unique refund order and successful refund-transaction indexes are database backstops against a
+duplicate refund. A fake-provider failure throws before the state transitions; the transaction rolls back and leaves
+the order paid, listing sold, and item for sale. Calling the deterministic local fake provider within the transaction
+is intentional. A remote provider requires an outbox/saga or asynchronous callback workflow rather than this
+request-bound transaction.
 
 ## Example flow: shipping and completing an order
 

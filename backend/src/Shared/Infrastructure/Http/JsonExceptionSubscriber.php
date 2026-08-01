@@ -28,6 +28,7 @@ use App\Marketplace\Domain\Exception\ListingUnavailable;
 use App\Order\Application\Exception\OrderItemNotFound;
 use App\Order\Application\Exception\OrderNotFound;
 use App\Order\Application\Exception\PaymentFailed;
+use App\Order\Application\Exception\RefundFailed;
 use App\Order\Domain\Exception\CartItemNotFound;
 use App\Order\Domain\Exception\EmptyCart;
 use App\Order\Domain\Exception\InvalidCart;
@@ -35,6 +36,7 @@ use App\Order\Domain\Exception\InvalidCollectionImport;
 use App\Order\Domain\Exception\InvalidOrder;
 use App\Order\Domain\Exception\InvalidOrderTransition;
 use App\Order\Domain\Exception\InvalidShippingSelection;
+use App\Order\Domain\Exception\OrderNotCancellable;
 use App\Payment\Domain\Exception\InvalidPayment;
 use App\Review\Application\Exception\ReviewedUserNotFound;
 use App\Review\Domain\Exception\InvalidReview;
@@ -114,9 +116,11 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof InvalidCollectionImport => [409, 'invalid_collection_import', $exception->getMessage()],
             $exception instanceof InvalidOrderTransition,
             $exception instanceof InvalidShipment => [409, 'invalid_order_transition', $exception->getMessage()],
+            $exception instanceof OrderNotCancellable => [409, 'order_not_cancellable', $exception->getMessage()],
             $exception instanceof InvalidOrder,
             $exception instanceof InvalidPayment => [422, 'invalid_order', $exception->getMessage()],
             $exception instanceof PaymentFailed => [402, 'payment_failed', $exception->getMessage()],
+            $exception instanceof RefundFailed => [502, 'refund_failed', $exception->getMessage()],
             $exception instanceof ReviewedUserNotFound => [404, 'user_not_found', $exception->getMessage()],
             $exception instanceof ReviewAlreadyExists => [409, 'review_already_exists', $exception->getMessage()],
             $exception instanceof InvalidReview => [409, 'invalid_review', $exception->getMessage()],

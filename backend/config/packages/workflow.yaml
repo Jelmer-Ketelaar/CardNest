@@ -39,6 +39,9 @@ framework:
                 cancel:
                     from: [draft, active]
                     to: cancelled
+                cancel_order:
+                    from: [reserved, sold]
+                    to: cancelled
                 expire:
                     from: active
                     to: expired
@@ -67,6 +70,12 @@ framework:
                 payment_received:
                     from: pending_payment
                     to: paid
+                cancel:
+                    from: [pending_payment, paid]
+                    to: cancelled
+                mark_refunded:
+                    from: cancelled
+                    to: refunded
                 mark_shipped:
                     from: paid
                     to: shipped
