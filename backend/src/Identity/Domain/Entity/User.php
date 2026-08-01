@@ -7,6 +7,7 @@ namespace App\Identity\Domain\Entity;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use InvalidArgumentException;
 use LogicException;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -93,6 +94,18 @@ final class User implements UserInterface, PasswordAuthenticatedUserInterface
 
         $this->emailVerifiedAt = $verifiedAt;
         $this->updatedAt = $verifiedAt;
+    }
+
+    public function changePasswordHash(
+        string $passwordHash,
+        DateTimeImmutable $changedAt = new DateTimeImmutable(),
+    ): void {
+        if (trim($passwordHash) === '') {
+            throw new InvalidArgumentException('A password hash cannot be blank.');
+        }
+
+        $this->passwordHash = $passwordHash;
+        $this->updatedAt = $changedAt;
     }
 
     public function getCreatedAt(): DateTimeImmutable

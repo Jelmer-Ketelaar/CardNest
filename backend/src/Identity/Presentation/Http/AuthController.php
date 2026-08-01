@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Identity\Presentation\Http;
 
+use App\Identity\Application\ConfirmPasswordReset;
+use App\Identity\Application\Dto\ConfirmPasswordResetRequest;
 use App\Identity\Application\Dto\LoginRequest;
 use App\Identity\Application\Dto\RegisterRequest;
 use App\Identity\Application\Dto\RequestPasswordResetRequest;
@@ -73,6 +75,16 @@ final readonly class AuthController
         $service->request($request);
 
         return new Response(status: Response::HTTP_ACCEPTED);
+    }
+
+    #[Route('/reset-password', methods: ['POST'])]
+    public function confirmPasswordReset(
+        #[MapRequestPayload] ConfirmPasswordResetRequest $request,
+        ConfirmPasswordReset $service,
+    ): Response {
+        $service->confirm($request);
+
+        return new Response(status: Response::HTTP_NO_CONTENT);
     }
 
     #[Route('/email-verification/verify', methods: ['POST'])]
