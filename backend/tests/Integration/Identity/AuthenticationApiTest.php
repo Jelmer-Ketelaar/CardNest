@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Identity;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Uid\Uuid;
@@ -11,10 +12,12 @@ use Symfony\Component\Uid\Uuid;
 final class AuthenticationApiTest extends WebTestCase
 {
     private KernelBrowser $client;
+    private EntityManagerInterface $entityManager;
 
     protected function setUp(): void
     {
         $this->client = self::createClient();
+        $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
     }
 
     public function testVisitorCanRegisterLoginAndLogout(): void
@@ -74,7 +77,60 @@ final class AuthenticationApiTest extends WebTestCase
 
         // Assert
         self::assertResponseStatusCodeSame(422);
-        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+        $error = $this->responseData()['error'] ?? null;
+        self::assertIsArray($error);
+        self::assertSame('validation_failed', $error['code'] ?? null);
+        self::assertArrayHasKey('email', $error['details'] ?? []);
+    }
+
+    public function testRegistrationNormalizesEmailAndPersistsOnlyAPasswordHash(): void
+    {
+        // Arrange
+        $email = sprintf('Collector-%s@Example.COM', Uuid::v7()->toRfc4122());
+        $normalizedEmail = mb_strtolower($email);
+        $password = 'A-strong-password-123';
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => $email,
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame($normalizedEmail, $this->responseData()['user']['email'] ?? null);
+        $passwordHash = $this->entityManager->getConnection()->fetchOne(
+            'SELECT password_hash FROM users WHERE email = :email',
+            ['email' => $normalizedEmail],
+        );
+        self::assertIsString($passwordHash);
+        self::assertNotSame($password, $passwordHash);
+        self::assertTrue(password_verify($password, $passwordHash));
+    }
+
+    public function testDuplicateRegistrationReturnsASafeConflict(): void
+    {
+        // Arrange
+        $email = sprintf('duplicate-%s@example.com', Uuid::v7()->toRfc4122());
+        $password = 'A-strong-password-123';
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => $email,
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(201);
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => mb_strtoupper($email),
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('email_already_registered', $this->responseData()['error']['code'] ?? null);
     }
 
     public function testInvalidCredentialsReturnTheSameSafeAuthenticationError(): void
