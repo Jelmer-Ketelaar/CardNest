@@ -111,6 +111,19 @@ final class CatalogApiTest extends WebTestCase
         self::assertSame('request_failed', $this->responseData()['error']['code'] ?? null);
     }
 
+    public function testUnknownCardSetReturnsStructuredNotFoundError(): void
+    {
+        // Arrange
+        $unknownId = Uuid::v7()->toRfc4122();
+
+        // Act
+        $this->client->request('GET', '/api/v1/card-sets/'.$unknownId);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('request_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
     private function createSet(): CardSet
     {
         $suffix = Uuid::v7()->toRfc4122();
