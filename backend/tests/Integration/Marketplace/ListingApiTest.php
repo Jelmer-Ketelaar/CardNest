@@ -18,6 +18,7 @@ use App\Identity\Domain\Entity\User;
 use App\Marketplace\Application\Message\ExpireListing;
 use App\Marketplace\Application\Message\ExpireListingHandler;
 use DateTimeImmutable;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -200,6 +201,46 @@ final class ListingApiTest extends WebTestCase
         // Assert
         self::assertResponseStatusCodeSame(409);
         self::assertSame('listing_already_exists', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testDatabaseConstraintRejectsTwoBlockingListingsForOnePhysicalCard(): void
+    {
+        // Arrange
+        $firstListingId = $this->createDraft($this->item);
+        $secondListingId = $this->createDraft($this->item);
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$firstListingId.'/publish', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+
+        // Act
+        $this->expectException(UniqueConstraintViolationException::class);
+        $this->entityManager->getConnection()->executeStatement(
+            "UPDATE listings SET status = 'active', published_at = NOW() WHERE id = :id",
+            ['id' => $secondListingId],
+        );
+
+        // Assert
+        // The partial unique index is the observable concurrency safeguard.
+    }
+
+    public function testCancelledListingHistoryDoesNotBlockANewListingForTheSamePhysicalCard(): void
+    {
+        // Arrange
+        $firstListingId = $this->createDraft($this->item);
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$firstListingId.'/publish', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$firstListingId.'/cancel', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+
+        // Act
+        $secondListingId = $this->createDraft($this->item);
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$secondListingId.'/publish', $this->sellerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame('active', $this->responseData()['status'] ?? null);
+        $this->authorizedRequest('GET', '/api/v1/me/listings', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+        self::assertSame(2, $this->responseData()['total'] ?? null);
     }
 
     public function testSellerListingOverviewIncludesDraftsAndPrivateCollectionReference(): void
