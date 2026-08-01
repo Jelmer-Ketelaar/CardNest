@@ -58,4 +58,12 @@ describe('router authentication guard', () => {
     // Assert
     expect(router.currentRoute.value.name).toBe('catalog-card')
   })
+
+  it('redirects an unauthenticated visitor away from a collection item', async () => {
+    // Act
+    await router.push({ name: 'collection-item', params: { id: 'item-id' } })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('login')
+  })
 })

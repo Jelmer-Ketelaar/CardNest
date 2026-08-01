@@ -160,8 +160,12 @@ h1, h2, p { overflow-wrap: anywhere; }
 .card-facts dt { color: #65736a; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
 .card-facts dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 .card-notes { padding-top: .75rem; border-top: 1px solid #e2e9e3; color: #536258; }
+.immutable-note { padding: .8rem; border-left: 3px solid #d19327; border-radius: .35rem; color: #61480d; background: #fff7df; }
+.duplicate-note { color: #724405; font-weight: 650; }
 .card-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .card-actions .button { flex: 1; }
+.collection-item-detail { display: grid; gap: 1.5rem; }
+.collection-item-detail__art { min-height: 16rem; overflow: hidden; border-radius: .65rem; }
 
 .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(9, 20, 13, .6); overflow-y: auto; }
@@ -502,6 +506,8 @@ progress { width: 100%; height: .65rem; accent-color: #286440; }
   .catalog-card-result > img { width: 100%; aspect-ratio: 2.5 / 3.5; }
   .catalog-card-detail { grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr); align-items: start; }
   .catalog-card-detail > img { position: sticky; top: 1rem; }
+  .collection-item-detail { grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr); align-items: start; }
+  .collection-item-detail__art { position: sticky; top: 1rem; }
   .listing-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .seller-workspace { grid-template-columns: minmax(18rem, 25rem) minmax(0, 1fr); }
   .seller-listing-card { grid-template-columns: 6rem minmax(0, 1fr) auto; align-items: center; }

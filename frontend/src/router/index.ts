@@ -3,6 +3,7 @@ import AccountPage from '../pages/AccountPage.vue'
 import DashboardPage from '../pages/DashboardPage.vue'
 import HealthPage from '../pages/HealthPage.vue'
 import CollectionPage from '../pages/CollectionPage.vue'
+import CollectionItemDetailPage from '../pages/CollectionItemDetailPage.vue'
 import BindersPage from '../pages/BindersPage.vue'
 import CartPage from '../pages/CartPage.vue'
 import CatalogCardDetailPage from '../pages/CatalogCardDetailPage.vue'
@@ -36,6 +37,7 @@ export const router = createRouter({
     { path: '/account', name: 'account', component: AccountPage, meta: { requiresAuth: true } },
     { path: '/dashboard', name: 'dashboard', component: DashboardPage, meta: { requiresAuth: true } },
     { path: '/collection', name: 'collection', component: CollectionPage, meta: { requiresAuth: true } },
+    { path: '/collection/:id', name: 'collection-item', component: CollectionItemDetailPage, meta: { requiresAuth: true } },
     { path: '/storage', name: 'storage', component: StoragePage, meta: { requiresAuth: true } },
     { path: '/binders', name: 'binders', component: BindersPage, meta: { requiresAuth: true } },
     { path: '/wishlists', name: 'wishlists', component: WishlistsPage, meta: { requiresAuth: true } },
