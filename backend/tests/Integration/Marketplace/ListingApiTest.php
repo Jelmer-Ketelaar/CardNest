@@ -57,11 +57,34 @@ final class ListingApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
 
         // Act
+        $this->publicRequest('GET', '/api/v1/listings');
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame(0, $this->responseData()['total'] ?? null);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings/'.Uuid::v7()->toRfc4122());
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+
+        // Act
         $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/publish', $this->sellerToken);
 
         // Assert
         self::assertResponseIsSuccessful();
         self::assertSame('active', $this->responseData()['status'] ?? null);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings/'.$listingId);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $detail = $this->responseData();
+        self::assertSame('active', $detail['status'] ?? null);
+        self::assertSame(750, $detail['price']['amount'] ?? null);
+        self::assertArrayNotHasKey('collectionItemId', $detail);
 
         // Act
         $query = http_build_query([
@@ -148,6 +171,14 @@ final class ListingApiTest extends WebTestCase
             : []);
 
         // Act
+        $this->publicRequest('GET', '/api/v1/listings/'.$listingId);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame(900, $this->responseData()['price']['amount'] ?? null);
+        self::assertArrayNotHasKey('collectionItemId', $this->responseData());
+
+        // Act
         $this->jsonRequest(
             'PATCH',
             '/api/v1/me/collection-items/'.$this->item->getId()->toRfc4122(),
@@ -201,6 +232,100 @@ final class ListingApiTest extends WebTestCase
         // Assert
         self::assertResponseStatusCodeSame(409);
         self::assertSame('listing_already_exists', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testPublicSearchPaginatesDeterministicallyAndRejectsMalformedFilters(): void
+    {
+        // Arrange
+        $firstListingId = $this->createDraft($this->item);
+        $secondListingId = $this->createDraft($this->secondItem);
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$firstListingId.'/publish', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$secondListingId.'/publish', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings?page=1&perPage=1');
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame(1, $this->responseData()['page'] ?? null);
+        self::assertSame(1, $this->responseData()['perPage'] ?? null);
+        self::assertSame(2, $this->responseData()['total'] ?? null);
+        self::assertSame(2, $this->responseData()['totalPages'] ?? null);
+        self::assertCount(1, $this->responseData()['items'] ?? []);
+        $firstPageListingId = $this->responseData()['items'][0]['id'] ?? null;
+        self::assertIsString($firstPageListingId);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings?page=2&perPage=1');
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame(2, $this->responseData()['page'] ?? null);
+        self::assertCount(1, $this->responseData()['items'] ?? []);
+        $secondPageListingId = $this->responseData()['items'][0]['id'] ?? null;
+        self::assertIsString($secondPageListingId);
+        self::assertNotSame($firstPageListingId, $secondPageListingId);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings?page=1&perPage=1');
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame($firstPageListingId, $this->responseData()['items'][0]['id'] ?? null);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings?condition=unknown');
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings?minimumPrice=900&maximumPrice=750');
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testListingWorkflowRejectsUnauthorizedAndRepeatedLifecycleActions(): void
+    {
+        // Arrange
+        $listingId = $this->createDraft($this->item);
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/publish', $this->otherToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/publish', $this->sellerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/publish', $this->sellerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('invalid_listing_transition', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/cancel', $this->sellerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/cancel', $this->sellerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('invalid_listing_transition', $this->responseData()['error']['code'] ?? null);
     }
 
     public function testDatabaseConstraintRejectsTwoBlockingListingsForOnePhysicalCard(): void
@@ -356,6 +481,19 @@ final class ListingApiTest extends WebTestCase
         $this->authorizedRequest('GET', '/api/v1/me/collection-items/'.$itemId, $this->sellerToken);
         self::assertResponseIsSuccessful();
         self::assertSame('in_collection', $this->responseData()['status'] ?? null);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings/'.$listingId);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+
+        // Act
+        $this->publicRequest('GET', '/api/v1/listings?cardId='.$this->item->getCatalogCard()->getId()->toRfc4122());
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame(0, $this->responseData()['total'] ?? null);
     }
 
     private function createDraft(CollectionItem $item): string

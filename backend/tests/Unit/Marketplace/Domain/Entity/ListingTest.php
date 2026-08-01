@@ -59,6 +59,20 @@ final class ListingTest extends TestCase
         // The expected domain exception is the observable result.
     }
 
+    public function testRejectsAnArchivedPhysicalCard(): void
+    {
+        // Arrange
+        [$seller, $item] = $this->collectionItem();
+        $item->archive();
+        $this->expectException(InvalidListing::class);
+
+        // Act
+        $this->listing($seller, $item);
+
+        // Assert
+        // Only currently available physical items can initiate a listing.
+    }
+
     public function testRequiresFrontAndBackPhotosAndShipping(): void
     {
         // Arrange
