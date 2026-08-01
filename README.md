@@ -43,7 +43,7 @@ CardNest is implemented incrementally, one module at a time. This is the current
 
 - Browse card series and sets (`GET /api/v1/card-sets`), each with release date, language, printed/total card
   counts, and lifecycle status (announced, active, out of print, unknown)
-- Search the catalog (`GET /api/v1/cards`) filtered by set, name, card number, or rarity, with pagination
+- Search the catalog (`GET /api/v1/cards`) filtered by set, series, name, card number, rarity, or variant, with pagination
 - Look up a single set or card in full detail, including every variant it was printed in (holo, reverse holo,
   illustration rare, ...) drawn from a closed, configurable vocabulary instead of free text
 - Every catalog card keeps, and exposes, a record of the external source(s) it was imported from (source name,
