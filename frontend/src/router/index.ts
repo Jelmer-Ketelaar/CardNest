@@ -41,6 +41,8 @@ export const router = createRouter({
     { path: '/storage', name: 'storage', component: StoragePage, meta: { requiresAuth: true } },
     { path: '/binders', name: 'binders', component: BindersPage, meta: { requiresAuth: true } },
     { path: '/wishlists', name: 'wishlists', component: WishlistsPage, meta: { requiresAuth: true } },
+    { path: '/wishlists/new', name: 'wishlist-create', component: WishlistsPage, meta: { requiresAuth: true } },
+    { path: '/wishlists/:id', name: 'wishlist-detail', component: WishlistsPage, meta: { requiresAuth: true } },
     { path: '/my-listings', name: 'my-listings', component: MyListingsPage, meta: { requiresAuth: true } },
     { path: '/cart', name: 'cart', component: CartPage, meta: { requiresAuth: true } },
     { path: '/orders', name: 'orders', component: OrdersPage, meta: { requiresAuth: true } },
