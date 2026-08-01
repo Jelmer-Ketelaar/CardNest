@@ -10,6 +10,7 @@ use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Repository\CollectionItemRepository;
+use App\Collection\Domain\Repository\CollectionRepository;
 use App\Identity\Domain\Entity\User;
 use App\Shared\Domain\ValueObject\Money;
 use DateTimeImmutable;
@@ -19,6 +20,7 @@ final readonly class CreateCollectionItems
 {
     public function __construct(
         private CollectionItemReferenceResolver $references,
+        private CollectionRepository $collections,
         private CollectionItemRepository $collectionItems,
         private RegisteredCollectionItemsProcessor $registeredItemsProcessor,
     ) {
@@ -28,6 +30,7 @@ final readonly class CreateCollectionItems
     {
         $card = $this->references->card($request->catalogCardId);
         $variant = $this->references->variant($card, $request->variantId);
+        $collection = $this->collections->getOrCreateForOwner($owner);
         $price = $request->purchasePrice !== null && $request->purchaseCurrency !== null
             ? new Money($request->purchasePrice, $request->purchaseCurrency)
             : null;
@@ -36,7 +39,7 @@ final readonly class CreateCollectionItems
         $items = [];
         for ($index = 0; $index < $request->quantity; ++$index) {
             $items[] = new CollectionItem(
-                owner: $owner,
+                collection: $collection,
                 catalogCard: $card,
                 variant: $variant,
                 language: CardLanguage::from($request->language),

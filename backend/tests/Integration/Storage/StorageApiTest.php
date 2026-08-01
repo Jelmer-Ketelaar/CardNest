@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
@@ -33,7 +34,9 @@ final class StorageApiTest extends WebTestCase
         $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
         [$owner, $this->ownerToken] = $this->createAuthenticatedUser('owner');
         [, $this->otherToken] = $this->createAuthenticatedUser('other');
-        $this->item = $this->createItem($owner);
+        $collection = new Collection($owner);
+        $this->entityManager->persist($collection);
+        $this->item = $this->createItem($collection);
         $this->entityManager->flush();
     }
 
@@ -222,7 +225,7 @@ final class StorageApiTest extends WebTestCase
         return [$user, $plainToken];
     }
 
-    private function createItem(User $owner): CollectionItem
+    private function createItem(Collection $collection): CollectionItem
     {
         $suffix = Uuid::v7()->toRfc4122();
         $series = new CardSeries('Series '.$suffix);
@@ -237,7 +240,7 @@ final class StorageApiTest extends WebTestCase
         );
         $card = new CatalogCard($set, 'Mudkip', '19/25', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($owner, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $item = new CollectionItem($collection, $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $this->entityManager->persist($series);
         $this->entityManager->persist($set);
         $this->entityManager->persist($card);

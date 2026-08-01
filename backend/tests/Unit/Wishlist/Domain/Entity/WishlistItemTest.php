@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Shared\Domain\ValueObject\Money;
@@ -39,7 +40,7 @@ final class WishlistItemTest extends TestCase
         );
         $wishlist->addItem($item);
         $matching = new CollectionItem(
-            $owner,
+            new Collection($owner),
             $card,
             $variant,
             CardLanguage::English,
@@ -75,7 +76,7 @@ final class WishlistItemTest extends TestCase
             1,
         );
         $badCondition = new CollectionItem(
-            $owner,
+            new Collection($owner),
             $card,
             $variant,
             CardLanguage::English,
@@ -83,7 +84,7 @@ final class WishlistItemTest extends TestCase
             new Money(400, 'EUR'),
         );
         $tooExpensive = new CollectionItem(
-            $owner,
+            new Collection($owner),
             $card,
             $variant,
             CardLanguage::English,
@@ -91,7 +92,7 @@ final class WishlistItemTest extends TestCase
             new Money(501, 'EUR'),
         );
         $unknownPrice = new CollectionItem(
-            $owner,
+            new Collection($owner),
             $card,
             $variant,
             CardLanguage::English,
