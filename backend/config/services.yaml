@@ -29,8 +29,14 @@ services:
     App\Identity\Domain\Repository\EmailVerificationTokenRepository:
         alias: App\Identity\Infrastructure\Persistence\DoctrineEmailVerificationTokenRepository
 
+    App\Identity\Domain\Repository\PasswordResetTokenRepository:
+        alias: App\Identity\Infrastructure\Persistence\DoctrinePasswordResetTokenRepository
+
     App\Identity\Application\Email\EmailVerificationSender:
         alias: App\Identity\Infrastructure\Email\LoggingEmailVerificationSender
+
+    App\Identity\Application\Email\PasswordResetSender:
+        alias: App\Identity\Infrastructure\Email\LoggingPasswordResetSender
 
     App\Identity\Application\Security\LoginRateLimiter:
         arguments:
@@ -39,6 +45,10 @@ services:
     App\Identity\Application\Security\EmailVerificationRateLimiter:
         arguments:
             $limiter: '@limiter.email_verification'
+
+    App\Identity\Application\Security\PasswordResetRateLimiter:
+        arguments:
+            $limiter: '@limiter.password_reset'
 
     App\Catalog\Domain\Repository\CardSetRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCardSetRepository
