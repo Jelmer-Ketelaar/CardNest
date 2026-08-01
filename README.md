@@ -323,6 +323,7 @@ Run the main quality checks with:
 docker compose exec backend vendor/bin/phpunit
 docker compose exec backend vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 docker compose exec backend vendor/bin/php-cs-fixer fix --dry-run --diff
+docker compose exec frontend npm run lint
 docker compose exec frontend npm test
 docker compose exec frontend npm run build
 docker compose exec frontend npm run test:e2e
