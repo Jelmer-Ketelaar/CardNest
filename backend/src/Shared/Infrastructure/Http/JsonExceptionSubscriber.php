@@ -44,6 +44,7 @@ use App\Shipping\Domain\Exception\InvalidShipment;
 use App\Storage\Application\Exception\StorageLocationNotFound;
 use App\Storage\Domain\Exception\InvalidStorageHierarchy;
 use App\Storage\Domain\Exception\InvalidStorageTarget;
+use App\Storage\Domain\Exception\StorageLocationInUse;
 use App\Storage\Domain\Exception\StorageOwnerMismatch;
 use App\Wishlist\Application\Exception\WishlistCardUnavailable;
 use App\Wishlist\Application\Exception\WishlistItemNotFound;
@@ -87,6 +88,7 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof ArchivedCollectionItemCannotBeChanged => [409, 'collection_item_archived', $exception->getMessage()],
             $exception instanceof ListedCollectionItemCannotBeChanged => [409, 'collection_item_listed', $exception->getMessage()],
             $exception instanceof StorageLocationNotFound => [404, 'storage_location_not_found', $exception->getMessage()],
+            $exception instanceof StorageLocationInUse => [409, 'storage_location_in_use', $exception->getMessage()],
             $exception instanceof InvalidStorageHierarchy,
             $exception instanceof InvalidStorageTarget,
             $exception instanceof StorageOwnerMismatch => [422, 'invalid_storage_hierarchy', $exception->getMessage()],

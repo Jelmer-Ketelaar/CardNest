@@ -6,7 +6,10 @@ namespace App\Storage\Infrastructure\Persistence;
 
 use App\Identity\Domain\Entity\User;
 use App\Storage\Domain\Entity\StorageLocation;
+use App\Storage\Domain\Exception\StorageLocationInUse;
 use App\Storage\Domain\Repository\StorageLocationRepository;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
+use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
@@ -61,5 +64,39 @@ final readonly class DoctrineStorageLocationRepository implements StorageLocatio
     {
         $this->entityManager->persist($location);
         $this->entityManager->flush();
+    }
+
+    public function isRemovable(StorageLocation $location): bool
+    {
+        $isRemovable = $this->entityManager->getConnection()->fetchOne(
+            <<<'SQL'
+                SELECT CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM storage_locations child WHERE child.parent_id = :id
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM binders binder WHERE binder.parent_location_id = :id
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM collection_item_location_history history WHERE history.storage_location_id = :id
+                ) THEN 1 ELSE 0 END
+                SQL,
+            ['id' => $location->getId()->toRfc4122()],
+            ['id' => ParameterType::STRING],
+        );
+
+        return (int) $isRemovable === 1;
+    }
+
+    public function remove(StorageLocation $location): void
+    {
+        try {
+            $this->entityManager->getConnection()->executeStatement(
+                'DELETE FROM storage_locations WHERE id = :id',
+                ['id' => $location->getId()->toRfc4122()],
+                ['id' => ParameterType::STRING],
+            );
+        } catch (ForeignKeyConstraintViolationException) {
+            throw new StorageLocationInUse('Een opslaglocatie met sublocaties, binders of locatiehistorie kan niet worden verwijderd.');
+        }
+
+        $this->entityManager->detach($location);
     }
 }
