@@ -1,4 +1,4 @@
-# ADR 0001: Model refunds per seller order for shared payments
+# ADR 0002: Model refunds per seller order for shared payments
 
 ## Context
 

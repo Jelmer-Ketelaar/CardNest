@@ -276,6 +276,9 @@ the order paid, listing sold, and item for sale. Calling the deterministic local
 is intentional. A remote provider requires an outbox/saga or asynchronous callback workflow rather than this
 request-bound transaction.
 
+The shared-payment decision is recorded in
+[ADR 0002: Per-order refunds for shared payments](adr/0002-per-order-refunds-for-shared-payments.md).
+
 ## Example flow: shipping and completing an order
 
 ```mermaid
