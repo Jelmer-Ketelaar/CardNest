@@ -19,6 +19,7 @@ use App\Identity\Application\Exception\EmailAlreadyRegistered;
 use App\Identity\Application\Exception\EmailAlreadyVerified;
 use App\Identity\Application\Exception\InvalidCredentials;
 use App\Identity\Application\Exception\InvalidEmailVerificationToken;
+use App\Identity\Application\Exception\InvalidPasswordResetToken;
 use App\Marketplace\Application\Exception\ListingNotFound;
 use App\Marketplace\Domain\Exception\CannotPurchaseOwnListing;
 use App\Marketplace\Domain\Exception\InvalidListing;
@@ -78,6 +79,7 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof EmailAlreadyVerified => [409, 'email_already_verified', $exception->getMessage()],
             $exception instanceof InvalidCredentials => [401, 'invalid_credentials', $exception->getMessage()],
             $exception instanceof InvalidEmailVerificationToken => [400, 'invalid_email_verification_token', $exception->getMessage()],
+            $exception instanceof InvalidPasswordResetToken => [400, 'invalid_password_reset_token', $exception->getMessage()],
             $exception instanceof CollectionItemNotFound => [404, 'collection_item_not_found', $exception->getMessage()],
             $exception instanceof CatalogCardUnavailable => [422, 'catalog_card_unavailable', $exception->getMessage()],
             $exception instanceof CardVariantUnavailable,

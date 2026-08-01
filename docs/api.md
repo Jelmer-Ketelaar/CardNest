@@ -42,8 +42,21 @@ reset token.
 ```
 
 Malformed e-mail input returns the standard `422` validation response. Submitting a new request for the same account
-invalidates its previous reset token. Resetting the password with a token is documented separately when the
-confirmation endpoint is introduced.
+invalidates its previous reset token.
+
+`POST /api/v1/auth/reset-password` confirms a reset with the queued token and a new password:
+
+```json
+{
+  "token": "a 64-character lowercase hexadecimal token",
+  "password": "A-new-strong-password-123",
+  "passwordConfirmation": "A-new-strong-password-123"
+}
+```
+
+It returns `204` on success. The token must be unexpired and can be used only once; invalid, expired, or previously
+used tokens return `400 invalid_password_reset_token`. A successful reset revokes every existing bearer token for
+the account, so the user must sign in again with the new password. Malformed tokens or passwords return `422`.
 
 `GET /api/v1/me` requires a bearer token and returns the authenticated user's safe profile data:
 
