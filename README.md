@@ -332,5 +332,6 @@ docker compose exec frontend npm run test:e2e
 
 - [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes
 - [docs/architecture.md](docs/architecture.md) — system diagram, module layering, and an end-to-end request walkthrough
+- [docs/security-review.md](docs/security-review.md) — repeatable MVP security release gate and evidence template
 - [CONTRIBUTING.md](CONTRIBUTING.md) — ground rules, coding standards, and the workflow for adding the next module
 - [frontend/README.md](frontend/README.md) — frontend structure, API-client conventions, and how to add a page
