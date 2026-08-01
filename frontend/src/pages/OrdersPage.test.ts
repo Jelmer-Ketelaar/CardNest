@@ -159,6 +159,94 @@ describe('OrdersPage', () => {
     expect(button(root, 'Markeer als verzonden')).toBeUndefined()
   })
 
+  it('submits one completed-order review and removes the client-side action after success', async () => {
+    // Arrange
+    const order: Order = {
+      ...orderFixture({ id: 'completed-order', buyerId: 'current-user' }),
+      status: 'completed',
+      availableActions: { markShipped: false, confirmReceived: false },
+      completedAt: '2026-08-01T12:00:00+00:00',
+    }
+    mocks.apiRequest.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/me/orders') return Promise.resolve(orderCollection([order]))
+      if (path === '/me/reviews') return Promise.resolve({ items: [], total: 0 })
+      if (path === '/me/orders/completed-order/reviews' && options?.method === 'POST') {
+        return Promise.resolve({
+          id: 'review-id',
+          orderId: 'completed-order',
+          reviewer: { id: 'current-user' },
+          reviewedUser: { id: 'seller-id' },
+          scores: {
+            overall: 5,
+            descriptionAccuracy: 5,
+            packaging: 5,
+            communication: 5,
+            shippingSpeed: 5,
+          },
+          comment: null,
+          createdAt: '2026-08-01T12:00:00+00:00',
+        })
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+
+    // Act
+    const { root } = mountPage('current-user')
+    await flush()
+    clickButton(root, 'Schrijf review')
+    await flush()
+    clickButton(root, 'Plaats review')
+    await flush(5)
+
+    // Assert
+    expect(mocks.apiRequest).toHaveBeenCalledWith('/me/orders/completed-order/reviews', {
+      method: 'POST',
+      body: JSON.stringify({
+        overallScore: 5,
+        descriptionAccuracyScore: 5,
+        packagingScore: 5,
+        communicationScore: 5,
+        shippingSpeedScore: 5,
+        comment: null,
+      }),
+    })
+    expect(root.textContent).toContain('Je review is geplaatst.')
+    expect(button(root, 'Schrijf review')).toBeUndefined()
+    expect(root.textContent).toContain('Review geplaatst')
+  })
+
+  it('renders accessible review validation feedback', async () => {
+    // Arrange
+    const order: Order = {
+      ...orderFixture({ id: 'completed-order', buyerId: 'current-user' }),
+      status: 'completed',
+      availableActions: { markShipped: false, confirmReceived: false },
+      completedAt: '2026-08-01T12:00:00+00:00',
+    }
+    mocks.apiRequest.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/me/orders') return Promise.resolve(orderCollection([order]))
+      if (path === '/me/reviews') return Promise.resolve({ items: [], total: 0 })
+      if (path === '/me/orders/completed-order/reviews' && options?.method === 'POST') {
+        return Promise.reject(new mocks.ApiError('Controleer de reviewgegevens.', 422, 'validation_failed'))
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+
+    // Act
+    const { root } = mountPage('current-user')
+    await flush()
+    clickButton(root, 'Schrijf review')
+    await flush()
+    clickButton(root, 'Plaats review')
+    await flush(5)
+
+    // Assert
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('Controleer de reviewgegevens.')
+    expect(button(root, 'Schrijf review')).toBeDefined()
+  })
+
   it('renders a safe error when the order detail is not accessible', async () => {
     // Arrange
     mocks.route.name = 'order-detail'
