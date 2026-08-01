@@ -39,8 +39,8 @@ async function submit(): Promise<void> {
         Account aangemaakt. Log in en bevestig daarna je e-mailadres via de verzonden link.
       </p>
       <ErrorMessage v-if="error" :message="error" />
-      <BaseInput id="email" v-model="email" label="E-mailadres" type="email" autocomplete="email" />
-      <BaseInput id="password" v-model="password" label="Wachtwoord" type="password" autocomplete="current-password" />
+      <BaseInput id="email" v-model="email" label="E-mailadres" type="email" autocomplete="email" required />
+      <BaseInput id="password" v-model="password" label="Wachtwoord" type="password" autocomplete="current-password" required />
       <BaseButton type="submit" :disabled="submitting">{{ submitting ? 'Bezig…' : 'Inloggen' }}</BaseButton>
       <RouterLink :to="{ name: 'register' }">Nog geen account? Registreer je</RouterLink>
     </form>
