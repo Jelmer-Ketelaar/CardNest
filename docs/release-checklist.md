@@ -29,8 +29,8 @@ Do not put passwords, tokens, personal data, provider references or secret confi
 - [ ] Run `docker compose run --rm --no-deps frontend npm run build`.
 - [ ] Run `docker compose run --rm --no-deps frontend npm run test:e2e`.
 - [ ] Record the environment, date and results in the
-  [MVP regression issue](https://github.com/Jelmer-Ketelaar/CardNest/issues/161) or an equivalent linked release
-  record.
+  [MVP regression issue](https://github.com/Jelmer-Ketelaar/CardNest/issues/161) and
+  [regression verification record](release-verification.md).
 
 ## Release reviews
 
