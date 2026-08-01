@@ -39,9 +39,9 @@ async function submit(): Promise<void> {
       <p class="eyebrow">Start je digitale binder</p>
       <h1>Account maken</h1>
       <ErrorMessage v-if="error" :message="error" />
-      <BaseInput id="email" v-model="form.email" label="E-mailadres" type="email" autocomplete="email" :error="fieldErrors.email?.[0]" />
-      <BaseInput id="password" v-model="form.password" label="Wachtwoord" type="password" autocomplete="new-password" :error="fieldErrors.password?.[0]" />
-      <BaseInput id="password-confirmation" v-model="form.passwordConfirmation" label="Herhaal wachtwoord" type="password" autocomplete="new-password" :error="fieldErrors.passwordConfirmation?.[0]" />
+      <BaseInput id="email" v-model="form.email" label="E-mailadres" type="email" autocomplete="email" required :error="fieldErrors.email?.[0]" />
+      <BaseInput id="password" v-model="form.password" label="Wachtwoord" type="password" autocomplete="new-password" required :error="fieldErrors.password?.[0]" />
+      <BaseInput id="password-confirmation" v-model="form.passwordConfirmation" label="Herhaal wachtwoord" type="password" autocomplete="new-password" required :error="fieldErrors.passwordConfirmation?.[0]" />
       <BaseButton type="submit" :disabled="submitting">{{ submitting ? 'Bezig…' : 'Registreren' }}</BaseButton>
       <RouterLink :to="{ name: 'login' }">Al een account? Log in</RouterLink>
     </form>
