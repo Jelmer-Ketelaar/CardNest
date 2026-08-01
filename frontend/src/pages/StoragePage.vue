@@ -22,6 +22,7 @@ const saving = ref(false)
 const error = ref('')
 const success = ref('')
 const editing = ref<StorageLocation | null>(null)
+const deleting = ref<StorageLocation | null>(null)
 const createForm = reactive({ name: '', type: 'other', parentId: '' })
 const editForm = reactive({ name: '', type: 'other', parentId: '' })
 
@@ -83,6 +84,16 @@ function closeEdit(): void {
   editing.value = null
 }
 
+function startDelete(location: StorageLocation): void {
+  error.value = ''
+  success.value = ''
+  deleting.value = location
+}
+
+function closeDelete(): void {
+  deleting.value = null
+}
+
 async function updateLocation(): Promise<void> {
   const location = editing.value
   if (!location) return
@@ -107,6 +118,28 @@ async function updateLocation(): Promise<void> {
     await loadLocations()
   } catch (caught) {
     error.value = caughtMessage(caught, 'De opslaglocatie kon niet worden bijgewerkt.')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteLocation(): Promise<void> {
+  const location = deleting.value
+  if (!location || saving.value) return
+
+  error.value = ''
+  success.value = ''
+  saving.value = true
+  try {
+    await apiRequest<void>(`/me/storage-locations/${location.id}`, { method: 'DELETE' })
+    closeDelete()
+    success.value = 'De opslaglocatie is verwijderd.'
+    await loadLocations()
+  } catch (caught) {
+    error.value = caughtMessage(
+      caught,
+      'De opslaglocatie kon niet worden verwijderd. Verplaats eerst kaarten, binders en sublocaties.',
+    )
   } finally {
     saving.value = false
   }
@@ -167,7 +200,10 @@ onMounted(() => { void loadLocations() })
               <span>{{ typeLabel(location.type) }} · {{ location.currentItemCount }} kaarten</span>
               <small>{{ location.path.map((entry) => entry.name).join(' › ') }}</small>
             </div>
-            <BaseButton variant="secondary" @click="startEdit(location)">Bewerken</BaseButton>
+            <div class="row-actions">
+              <BaseButton variant="secondary" @click="startEdit(location)">Bewerken</BaseButton>
+              <BaseButton variant="danger" @click="startDelete(location)">Verwijderen</BaseButton>
+            </div>
           </li>
         </ol>
       </section>
@@ -199,6 +235,23 @@ onMounted(() => { void loadLocations() })
             <BaseButton type="submit" :disabled="saving">{{ saving ? 'Opslaan…' : 'Opslaan' }}</BaseButton>
           </div>
         </form>
+      </section>
+    </div>
+
+    <div v-if="deleting" class="modal-backdrop" @click.self="closeDelete">
+      <section class="panel edit-panel" role="dialog" aria-modal="true" aria-labelledby="delete-storage-heading">
+        <p class="eyebrow">Opslaghiërarchie</p>
+        <h2 id="delete-storage-heading">{{ deleting.name }} verwijderen?</h2>
+        <p>
+          Alleen een lege locatie zonder sublocaties, binder of kaartgeschiedenis kan worden verwijderd.
+          Kaarten en binders moeten eerst worden verplaatst.
+        </p>
+        <div class="dialog-actions">
+          <BaseButton variant="secondary" :disabled="saving" @click="closeDelete">Behouden</BaseButton>
+          <BaseButton variant="danger" :disabled="saving" @click="deleteLocation">
+            {{ saving ? 'Verwijderen…' : 'Definitief verwijderen' }}
+          </BaseButton>
+        </div>
       </section>
     </div>
   </main>
