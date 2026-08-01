@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible problem in CardNest.
+title: '[Bug]: '
+labels:
+  - type:bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve CardNest. Do not include passwords, access tokens, payment data,
+        personal addresses, or other sensitive information in this report.
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: Explain what you expected to happen.
+      placeholder: I expected …
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: Explain what happened instead, including any safe error message.
+      placeholder: Instead, …
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest set of steps that consistently reproduces the problem.
+      placeholder: |
+        1. Go to …
+        2. Enter …
+        3. Observe …
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, local Docker setup, or commit/PR where the problem was seen.
+      placeholder: Chrome 140 on macOS, local Docker Compose
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, tokens, payment data, and personal information.
+          required: true
