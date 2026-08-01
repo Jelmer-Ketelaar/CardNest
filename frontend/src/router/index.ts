@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import AccountPage from '../pages/AccountPage.vue'
 import DashboardPage from '../pages/DashboardPage.vue'
 import CollectionPage from '../pages/CollectionPage.vue'
 import BindersPage from '../pages/BindersPage.vue'
@@ -22,6 +23,7 @@ export const router = createRouter({
     { path: '/verify-email', name: 'verify-email', component: VerifyEmailPage },
     { path: '/marketplace', name: 'marketplace', component: MarketplacePage },
     { path: '/users/:id', name: 'user-profile', component: UserProfilePage },
+    { path: '/account', name: 'account', component: AccountPage, meta: { requiresAuth: true } },
     { path: '/dashboard', name: 'dashboard', component: DashboardPage, meta: { requiresAuth: true } },
     { path: '/collection', name: 'collection', component: CollectionPage, meta: { requiresAuth: true } },
     { path: '/storage', name: 'storage', component: StoragePage, meta: { requiresAuth: true } },
