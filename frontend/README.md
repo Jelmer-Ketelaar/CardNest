@@ -67,6 +67,7 @@ seller-profile routes show aggregate reputation and paginated review comments wi
 | --- | --- |
 | `npm run dev` | Start the Vite dev server |
 | `npm run build` | Type-check with `vue-tsc` and build production assets |
+| `npm run lint` | Lint Vue, TypeScript and Playwright source files |
 | `npm test` | Run Vitest unit tests once |
 | `npm run test:e2e` | Run the Playwright end-to-end suite |
 
