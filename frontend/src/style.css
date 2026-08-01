@@ -278,7 +278,7 @@ h1, h2, p { overflow-wrap: anywhere; }
 .wishlist-workspace { display: grid; align-items: start; gap: 1.5rem; }
 .wishlist-sidebar { display: grid; gap: 1rem; }
 .wishlist-list { display: grid; align-content: start; gap: .55rem; }
-.wishlist-list > button {
+.wishlist-list > .wishlist-list__link {
   display: grid;
   gap: .3rem;
   padding: .75rem;
@@ -287,10 +287,11 @@ h1, h2, p { overflow-wrap: anywhere; }
   color: inherit;
   background: #f7faf7;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
-.wishlist-list > button.active { border-color: #286440; box-shadow: inset 0 0 0 1px #286440; background: #ebf6ee; }
-.wishlist-list > button span { color: #617066; font-size: .8rem; }
+.wishlist-list > .wishlist-list__link.active { border-color: #286440; box-shadow: inset 0 0 0 1px #286440; background: #ebf6ee; }
+.wishlist-list > .wishlist-list__link span { color: #617066; font-size: .8rem; }
 progress { width: 100%; height: .65rem; accent-color: #286440; }
 .wishlist-main { min-width: 0; display: grid; gap: 1.25rem; }
 .wishlist-overview { width: 100%; }
@@ -324,6 +325,8 @@ progress { width: 100%; height: .65rem; accent-color: #286440; }
 .wishlist-card dl div { min-width: 0; }
 .wishlist-card dt { color: #617066; font-size: .7rem; text-transform: uppercase; }
 .wishlist-card dd { margin: .1rem 0 0; overflow: hidden; text-overflow: ellipsis; }
+.wishlist-item-actions, .wishlist-item-edit-form__actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.wishlist-item-edit-form { display: grid; gap: .8rem; }
 
 .marketplace-heading { align-items: end; }
 .catalog-set-grid { display: grid; gap: 1rem; }
@@ -508,6 +511,8 @@ progress { width: 100%; height: .65rem; accent-color: #286440; }
   .wishlist-title-row { grid-template-columns: 1fr minmax(12rem, 20rem); align-items: end; }
   .wishlist-settings { grid-template-columns: minmax(12rem, 1fr) auto auto; align-items: end; }
   .wishlist-item-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wishlist-item-edit-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wishlist-item-edit-form .wishlist-notes, .wishlist-item-edit-form__actions { grid-column: 1 / -1; }
   .marketplace-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .catalog-card-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .catalog-set-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -130,6 +130,49 @@ final class WishlistItemTest extends TestCase
         // The expected domain exception is the observable result.
     }
 
+    public function testUpdatingPreferencesNormalizesNotesAndSynchronizesCompletion(): void
+    {
+        // Arrange
+        [$owner, $card, $variant] = $this->references();
+        $wishlist = new Wishlist($owner, 'Mudkip');
+        $item = new WishlistItem(
+            $wishlist,
+            $card,
+            CardLanguage::English,
+            $variant,
+            CardCondition::Excellent,
+            new Money(500, 'EUR'),
+            2,
+        );
+        $wishlist->addItem($item);
+        $item->fulfill(2);
+
+        // Act
+        $item->updatePreferences(
+            null,
+            null,
+            null,
+            null,
+            3,
+            WishlistPriority::High,
+            '  Any clean Mudkip  ',
+        );
+        $item->synchronizeFulfillment(1);
+
+        // Assert
+        self::assertNull($item->getDesiredLanguage());
+        self::assertNull($item->getDesiredVariant());
+        self::assertNull($item->getMinimumCondition());
+        self::assertNull($item->getMaxPrice());
+        self::assertSame(3, $item->getDesiredQuantity());
+        self::assertSame(1, $item->getFulfilledQuantity());
+        self::assertSame(2, $item->getRemainingQuantity());
+        self::assertFalse($item->isCompleted());
+        self::assertNull($item->getCompletedAt());
+        self::assertSame(WishlistPriority::High, $item->getPriority());
+        self::assertSame('Any clean Mudkip', $item->getNotes());
+    }
+
     /** @return array{User, CatalogCard, \App\Catalog\Domain\Entity\CardVariant} */
     private function references(): array
     {

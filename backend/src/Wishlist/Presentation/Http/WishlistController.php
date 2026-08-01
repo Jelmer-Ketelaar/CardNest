@@ -11,9 +11,11 @@ use App\Wishlist\Application\DeleteWishlist;
 use App\Wishlist\Application\DeleteWishlistItem;
 use App\Wishlist\Application\Dto\AddWishlistItemRequest;
 use App\Wishlist\Application\Dto\CreateWishlistRequest;
+use App\Wishlist\Application\Dto\UpdateWishlistItemRequest;
 use App\Wishlist\Application\Dto\UpdateWishlistRequest;
 use App\Wishlist\Application\FindWishlists;
 use App\Wishlist\Application\UpdateWishlist;
+use App\Wishlist\Application\UpdateWishlistItem;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
@@ -70,6 +72,17 @@ final readonly class WishlistController
         AddWishlistItem $service,
     ): JsonResponse {
         return new JsonResponse($service->add($owner, $id, $request)->toArray(), Response::HTTP_CREATED);
+    }
+
+    #[Route('/{id}/items/{itemId}', methods: ['PATCH'])]
+    public function updateItem(
+        #[CurrentUser] User $owner,
+        string $id,
+        string $itemId,
+        #[MapRequestPayload] UpdateWishlistItemRequest $request,
+        UpdateWishlistItem $service,
+    ): JsonResponse {
+        return new JsonResponse($service->update($owner, $id, $itemId, $request)->toArray());
     }
 
     #[Route('/{id}/items/{itemId}', methods: ['DELETE'])]

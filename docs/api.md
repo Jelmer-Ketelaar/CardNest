@@ -329,8 +329,25 @@ Mint). Adding a goal immediately counts matching cards currently in the collecti
 
 The response preserves `desiredQuantity` and exposes `fulfilledQuantity`, `remainingQuantity`, `completed`, and
 `completedAt`. Registering new physical cards automatically advances every matching open goal, never beyond the
-desired quantity. `DELETE /api/v1/me/wishlists/{id}/items/{itemId}` removes one goal and returns the updated wishlist.
-Foreign wishlist and item UUIDs use owner-safe `404` responses.
+desired quantity.
+
+PATCH /api/v1/me/wishlists/{id}/items/{itemId} updates a goal's preferences without changing its catalog card.
+Only supplied fields are changed; use the corresponding clear flag to remove an optional preference. For example:
+
+~~~json
+{
+  "clearLanguage": true,
+  "maxPrice": 1000,
+  "maxCurrency": "EUR",
+  "desiredQuantity": 3,
+  "priority": "high"
+}
+~~~
+
+Supported clear flags are clearLanguage, clearVariant, clearMinimumCondition, clearMaxPrice, and clearNotes.
+After a preference update, fulfillment is recalculated from the caller's current collection. DELETE
+/api/v1/me/wishlists/{id}/items/{itemId} removes one goal and returns the updated wishlist. Foreign wishlist and item
+UUIDs use owner-safe 404 responses.
 
 ## Marketplace listings
 
