@@ -80,6 +80,19 @@ final class AuthenticationApiTest extends WebTestCase
         self::assertSame('authentication_required', $this->responseData()['error']['code'] ?? null);
     }
 
+    public function testLogoutRequiresAuthentication(): void
+    {
+        // Arrange
+        $headers = ['HTTP_ACCEPT' => 'application/json'];
+
+        // Act
+        $this->client->request('POST', '/api/v1/auth/logout', server: $headers);
+
+        // Assert
+        self::assertResponseStatusCodeSame(401);
+        self::assertSame('authentication_required', $this->responseData()['error']['code'] ?? null);
+    }
+
     public function testAuthenticatedUserCanRetrieveTheirSafeProfile(): void
     {
         // Arrange
@@ -119,6 +132,53 @@ final class AuthenticationApiTest extends WebTestCase
         self::assertArrayNotHasKey('password', $user);
         self::assertArrayNotHasKey('passwordHash', $user);
         self::assertArrayNotHasKey('token', $user);
+    }
+
+    public function testAuthenticatedUserCanOnlyRetrieveTheirOwnProfile(): void
+    {
+        // Arrange
+        $firstEmail = sprintf('first-user-%s@example.com', Uuid::v7()->toRfc4122());
+        $secondEmail = sprintf('second-user-%s@example.com', Uuid::v7()->toRfc4122());
+        $password = 'A-strong-password-123';
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => $firstEmail,
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(201);
+        $firstUser = $this->responseData()['user'] ?? null;
+        self::assertIsArray($firstUser);
+        self::assertIsString($firstUser['id'] ?? null);
+
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => $secondEmail,
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(201);
+        $secondUser = $this->responseData()['user'] ?? null;
+        self::assertIsArray($secondUser);
+        self::assertIsString($secondUser['id'] ?? null);
+
+        $this->jsonRequest('POST', '/api/v1/auth/login', ['email' => $secondEmail, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        $secondToken = $this->responseData()['token'] ?? null;
+        self::assertIsString($secondToken);
+
+        // Act
+        $this->client->request('GET', '/api/v1/me', server: [
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$secondToken,
+        ]);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $profile = $this->responseData()['user'] ?? null;
+        self::assertIsArray($profile);
+        self::assertSame($secondUser['id'], $profile['id'] ?? null);
+        self::assertSame($secondEmail, $profile['email'] ?? null);
+        self::assertNotSame($firstUser['id'], $profile['id']);
+        self::assertNotSame($firstEmail, $profile['email']);
     }
 
     /** @param array<string, string> $payload */
