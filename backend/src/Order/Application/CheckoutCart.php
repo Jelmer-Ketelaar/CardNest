@@ -126,6 +126,7 @@ final readonly class CheckoutCart
                 $payment->getId()->toRfc4122(),
                 $buyer->getId()->toRfc4122(),
                 $payment->getAmount(),
+                $this->idempotencyKey($cart, $preparedOrders),
             ));
             if (!$result->succeeded) {
                 throw new PaymentFailed($result->failureReason ?? 'De testbetaling is mislukt.');
@@ -224,5 +225,33 @@ final readonly class CheckoutCart
         }
 
         return $prepared;
+    }
+
+    /**
+     * A retry for the same cart contents and shipping selections keeps the
+     * same provider key. New cart items receive new UUIDs, so a later
+     * checkout is a distinct payment attempt.
+     *
+     * @param list<PreparedSellerOrder> $preparedOrders
+     */
+    private function idempotencyKey(ShoppingCart $cart, array $preparedOrders): string
+    {
+        $groups = [];
+        foreach ($preparedOrders as $prepared) {
+            $listingIds = array_map(
+                static fn (Listing $listing): string => $listing->getId()->toRfc4122(),
+                $prepared->group->getListings(),
+            );
+            sort($listingIds);
+            $groups[] = implode(':', [
+                $prepared->group->getSeller()->getId()->toRfc4122(),
+                $prepared->shippingQuote->code->value,
+                (string) $prepared->shippingQuote->price->amount,
+                implode(',', $listingIds),
+            ]);
+        }
+        sort($groups);
+
+        return 'checkout_'.hash('sha256', $cart->getId()->toRfc4122().'|'.implode('|', $groups));
     }
 }

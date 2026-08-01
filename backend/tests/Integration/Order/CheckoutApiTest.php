@@ -21,6 +21,8 @@ use App\Marketplace\Domain\Entity\ListingStatus;
 use App\Marketplace\Domain\Entity\ShippingMethodCode;
 use App\Marketplace\Domain\ValueObject\ListingPhotoReference;
 use App\Marketplace\Domain\ValueObject\ShippingOption;
+use App\Payment\Domain\Provider\PaymentProvider;
+use App\Payment\Infrastructure\Provider\FailingFakePaymentProvider;
 use App\Shared\Domain\ValueObject\Money;
 use App\Storage\Domain\Entity\CollectionItemLocationHistory;
 use App\Storage\Domain\Entity\StorageLocation;
@@ -248,6 +250,39 @@ final class CheckoutApiTest extends WebTestCase
         $this->authorizedRequest('GET', '/api/v1/me/orders', $this->buyerToken);
         self::assertResponseIsSuccessful();
         self::assertSame(0, $this->responseData()['total'] ?? null);
+    }
+
+    public function testCheckoutRollsBackWhenThePaymentProviderRejectsTheCharge(): void
+    {
+        // Arrange
+        $this->client->disableReboot();
+        self::getContainer()->set(PaymentProvider::class, new FailingFakePaymentProvider());
+        $this->addToCart($this->buyerToken, $this->sellerAFirst);
+        self::assertResponseStatusCodeSame(201);
+
+        // Act
+        $this->checkout($this->buyerToken, [
+            $this->sellerA->getId()->toRfc4122() => 'letter_mail',
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(402);
+        self::assertSame('payment_failed', $this->responseData()['error']['code'] ?? null);
+        self::assertSame('De testbetaling is afgewezen.', $this->responseData()['error']['message'] ?? null);
+
+        $this->authorizedRequest('GET', '/api/v1/me/cart', $this->buyerToken);
+        self::assertResponseIsSuccessful();
+        self::assertSame(1, $this->responseData()['itemCount'] ?? null);
+
+        $this->publicRequest('GET', '/api/v1/listings/'.$this->sellerAFirst->getId()->toRfc4122());
+        self::assertResponseIsSuccessful();
+        self::assertSame('active', $this->responseData()['status'] ?? null);
+
+        $connection = $this->entityManager->getConnection();
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM orders'));
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM payments'));
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM payment_transactions'));
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM listing_reservations'));
     }
 
     public function testSellerShipsAndBuyerCompletesOrderWithCollectionArchival(): void
