@@ -7,6 +7,24 @@ persistence, endpoint, tests, docs) rather than laying groundwork for several mo
 See [docs/architecture.md](docs/architecture.md) for how the codebase is organized and [docs/api.md](docs/api.md)
 for the current HTTP contract.
 
+## GitHub Project workflow
+
+All planned work starts from an issue in the private [CardNest Development GitHub Project](https://github.com/users/Jelmer-Ketelaar/projects/7).
+Select an unassigned `Todo` item, assign it, move it to `In Progress`, and keep the issue's scope intact. The exact
+end-to-end workflow, including review and completion, is in [docs/development-workflow.md](docs/development-workflow.md).
+
+Create branches from the current default branch using one of these forms:
+
+```text
+feature/<issue-number>-short-description
+fix/<issue-number>-short-description
+chore/<issue-number>-short-description
+```
+
+Every pull request must include `Closes #<issue-number>`, describe the completed scope and tests, use the pull
+request checklist, and avoid unrelated changes. Move its project item to `In Review` when the pull request opens
+unless an enabled Project workflow has done that safely.
+
 ## Ground rules
 
 These carry through every module, existing or future:

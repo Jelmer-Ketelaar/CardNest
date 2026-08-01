@@ -168,6 +168,13 @@ CardNest is implemented incrementally, one module at a time. This is the current
 
 The full HTTP contract is documented in [docs/api.md](docs/api.md).
 
+## Planning and contribution
+
+Delivery is tracked in the private [CardNest Development GitHub Project](https://github.com/users/Jelmer-Ketelaar/projects/7).
+It contains the ordered MVP roadmap, milestones, epics, dependencies, sizing and priority metadata. See the
+[product vision](docs/product-vision.md), [development workflow](docs/development-workflow.md) and
+[GitHub Project guide](docs/github-project.md) before selecting work.
+
 ## What's not built yet
 
 Everything below belongs to the product specification but is intentionally not implemented yet. Each will land as
