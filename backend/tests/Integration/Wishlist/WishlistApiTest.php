@@ -162,11 +162,19 @@ final class WishlistApiTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $items = $this->responseData()['items'] ?? [];
         self::assertCount(2, $items);
-        self::assertSame(2, $items[0]['fulfilledQuantity'] ?? null);
-        self::assertTrue($items[0]['completed'] ?? false);
-        self::assertNotNull($items[0]['completedAt'] ?? null);
-        self::assertSame(0, $items[1]['fulfilledQuantity'] ?? null);
-        self::assertFalse($items[1]['completed'] ?? true);
+        $itemsByMaxPrice = [];
+        foreach ($items as $item) {
+            self::assertIsArray($item);
+            $maxPrice = $item['maxPrice']['amount'] ?? null;
+            self::assertIsInt($maxPrice);
+            $itemsByMaxPrice[$maxPrice] = $item;
+        }
+
+        self::assertSame(2, $itemsByMaxPrice[500]['fulfilledQuantity'] ?? null);
+        self::assertTrue($itemsByMaxPrice[500]['completed'] ?? false);
+        self::assertNotNull($itemsByMaxPrice[500]['completedAt'] ?? null);
+        self::assertSame(0, $itemsByMaxPrice[200]['fulfilledQuantity'] ?? null);
+        self::assertFalse($itemsByMaxPrice[200]['completed'] ?? true);
         self::assertSame(67, $this->responseData()['progress']['percentage'] ?? null);
     }
 

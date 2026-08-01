@@ -345,3 +345,9 @@ reviews, and expose no order or payment references.
 
 See [docs/api.md](api.md) for the resulting HTTP contract and [../CONTRIBUTING.md](../CONTRIBUTING.md) for the
 workflow used to add the next module.
+
+## Architectural decision records
+
+Architecture decisions that shape the repository are recorded under [docs/adr](adr). The foundational decision is
+[ADR 0001: Modular monolith](adr/0001-modular-monolith.md); it explains why CardNest keeps module boundaries inside
+one deployable application rather than introducing distributed services for the MVP.
