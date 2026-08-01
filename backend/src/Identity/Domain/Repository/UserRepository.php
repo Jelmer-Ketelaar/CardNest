@@ -10,6 +10,8 @@ interface UserRepository
 {
     public function findById(string $id): ?User;
 
+    public function lockById(string $id): ?User;
+
     public function findByEmail(string $email): ?User;
 
     public function save(User $user): void;

@@ -7,7 +7,7 @@ import { useAuthStore } from './stores/auth'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const showShell = computed(() => !['login', 'register'].includes(String(route.name)))
+const showShell = computed(() => !['login', 'register', 'verify-email'].includes(String(route.name)))
 
 async function logout(): Promise<void> {
   await auth.logout()

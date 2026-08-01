@@ -7,15 +7,21 @@ namespace App\Identity\Presentation\Http;
 use App\Identity\Application\Dto\LoginRequest;
 use App\Identity\Application\Dto\RegisterRequest;
 use App\Identity\Application\Dto\UserResponse;
+use App\Identity\Application\Dto\VerifyEmailRequest;
 use App\Identity\Application\LoginUser;
 use App\Identity\Application\LogoutUser;
 use App\Identity\Application\RegisterUser;
+use App\Identity\Application\ResendEmailVerification;
+use App\Identity\Application\Security\EmailVerificationRateLimiter;
 use App\Identity\Application\Security\LoginRateLimiter;
+use App\Identity\Application\VerifyEmail;
+use App\Identity\Domain\Entity\User;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
 #[Route('/api/v1/auth')]
 final readonly class AuthController
@@ -51,5 +57,28 @@ final readonly class AuthController
         $service->logout(substr((string) $request->headers->get('Authorization'), 7));
 
         return new Response(status: Response::HTTP_NO_CONTENT);
+    }
+
+    #[Route('/email-verification/verify', methods: ['POST'])]
+    public function verifyEmail(
+        #[MapRequestPayload] VerifyEmailRequest $request,
+        VerifyEmail $service,
+    ): JsonResponse {
+        return new JsonResponse([
+            'user' => (new UserResponse($service->verify($request->token)))->toArray(),
+        ]);
+    }
+
+    #[Route('/email-verification/resend', methods: ['POST'])]
+    public function resendVerificationEmail(
+        #[CurrentUser] User $user,
+        Request $request,
+        EmailVerificationRateLimiter $rateLimiter,
+        ResendEmailVerification $service,
+    ): Response {
+        $rateLimiter->consume($user, $request->getClientIp() ?? 'unknown');
+        $service->resend($user);
+
+        return new Response(status: Response::HTTP_ACCEPTED);
     }
 }

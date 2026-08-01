@@ -23,7 +23,7 @@ security:
 
     # Note: Only the *first* matching rule is applied
     access_control:
-        - { path: ^/api/v1/(auth/register|auth/login|health)$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/v1/(auth/register|auth/login|auth/email-verification/verify|health)$, roles: PUBLIC_ACCESS }
         - { path: ^/api/v1/(card-sets|cards)(/|$), roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/v1/listings(/|$), roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/v1/users/[^/]+/reputation$, roles: PUBLIC_ACCESS, methods: [GET] }

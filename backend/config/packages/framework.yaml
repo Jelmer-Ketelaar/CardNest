@@ -9,6 +9,10 @@ framework:
             policy: token_bucket
             limit: 5
             rate: { interval: '1 minute', amount: 5 }
+        email_verification:
+            policy: token_bucket
+            limit: 3
+            rate: { interval: '1 hour', amount: 3 }
 
     #esi: true
     #fragments: true

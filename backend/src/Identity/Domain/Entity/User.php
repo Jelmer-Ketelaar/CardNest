@@ -80,6 +80,21 @@ final class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->emailVerifiedAt;
     }
 
+    public function isEmailVerified(): bool
+    {
+        return $this->emailVerifiedAt instanceof DateTimeImmutable;
+    }
+
+    public function verifyEmail(DateTimeImmutable $verifiedAt = new DateTimeImmutable()): void
+    {
+        if ($this->isEmailVerified()) {
+            return;
+        }
+
+        $this->emailVerifiedAt = $verifiedAt;
+        $this->updatedAt = $verifiedAt;
+    }
+
     public function getCreatedAt(): DateTimeImmutable
     {
         return $this->createdAt;

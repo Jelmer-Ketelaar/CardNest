@@ -26,12 +26,19 @@ services:
     App\Identity\Domain\Repository\AuthTokenRepository:
         alias: App\Identity\Infrastructure\Persistence\DoctrineAuthTokenRepository
 
+    App\Identity\Domain\Repository\EmailVerificationTokenRepository:
+        alias: App\Identity\Infrastructure\Persistence\DoctrineEmailVerificationTokenRepository
+
     App\Identity\Application\Email\EmailVerificationSender:
         alias: App\Identity\Infrastructure\Email\LoggingEmailVerificationSender
 
     App\Identity\Application\Security\LoginRateLimiter:
         arguments:
             $limiter: '@limiter.login'
+
+    App\Identity\Application\Security\EmailVerificationRateLimiter:
+        arguments:
+            $limiter: '@limiter.email_verification'
 
     App\Catalog\Domain\Repository\CardSetRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCardSetRepository

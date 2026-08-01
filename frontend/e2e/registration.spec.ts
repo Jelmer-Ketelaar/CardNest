@@ -15,4 +15,5 @@ test('a visitor can register', async ({ page }) => {
   await page.getByLabel('Herhaal wachtwoord').fill('A-strong-password-123')
   await page.getByRole('button', { name: 'Registreren' }).click()
   await expect(page).toHaveURL(/\/login\?registered=1$/)
+  await expect(page.getByText(/Account aangemaakt/)).toBeVisible()
 })
