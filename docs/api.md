@@ -86,9 +86,11 @@ Read-only and public. Describes official card data only — never a card a speci
 | Parameter | Type | Notes |
 | --- | --- | --- |
 | `setId` | UUID | exact card-set match |
+| `seriesId` | UUID | exact card-series match |
 | `name` | string | case-insensitive, partial |
 | `number` | string | case-insensitive, partial |
 | `rarity` | string | case-insensitive, exact |
+| `variant` | string | one of the documented variant codes; cards with that variant only |
 | `page` | int ≥ 1 | default `1` |
 | `perPage` | int 1–100 | default `20` |
 

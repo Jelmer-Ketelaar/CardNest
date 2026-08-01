@@ -54,6 +54,35 @@ final class CatalogRepositoryTest extends KernelTestCase
         self::assertSame($mudkip->getId()->toRfc4122(), $result->items[0]->getId()->toRfc4122());
     }
 
+    public function testSearchComposesSeriesAndVariantFilters(): void
+    {
+        // Arrange
+        $series = new CardSeries('Target series');
+        $set = $this->createSet('Target Set', $series);
+        $matchingCard = $this->createCard($set, 'Mudkip', '19/25', 'Promo');
+        $matchingCard->addVariant(VariantCode::Holo);
+        $this->createCard($set, 'Mudkip', '20/25', 'Promo');
+
+        $otherSet = $this->createSet('Other Set');
+        $otherSeriesCard = $this->createCard($otherSet, 'Mudkip', '19/25', 'Promo');
+        $otherSeriesCard->addVariant(VariantCode::Holo);
+        $this->entityManager->flush();
+
+        // Act
+        $result = $this->cards->search(new CatalogCardSearchCriteria(
+            seriesId: $series->getId()->toRfc4122(),
+            name: 'mud',
+            variant: VariantCode::Holo,
+            page: 1,
+            perPage: 1,
+        ));
+
+        // Assert
+        self::assertSame(1, $result->total);
+        self::assertCount(1, $result->items);
+        self::assertSame($matchingCard->getId()->toRfc4122(), $result->items[0]->getId()->toRfc4122());
+    }
+
     public function testSearchPaginatesCardsInStableOrder(): void
     {
         // Arrange
@@ -88,10 +117,10 @@ final class CatalogRepositoryTest extends KernelTestCase
         self::assertSame($set->getId()->toRfc4122(), $found?->getId()->toRfc4122());
     }
 
-    private function createSet(string $name = "McDonald's Collection 2021"): CardSet
+    private function createSet(string $name = "McDonald's Collection 2021", ?CardSeries $series = null): CardSet
     {
         $suffix = Uuid::v7()->toRfc4122();
-        $series = new CardSeries('Series '.$suffix);
+        $series ??= new CardSeries('Series '.$suffix);
         $set = new CardSet(
             series: $series,
             name: $name,
