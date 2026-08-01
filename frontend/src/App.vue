@@ -31,7 +31,8 @@ async function logout(): Promise<void> {
           <RouterLink :to="{ name: 'wishlists' }">Wishlists</RouterLink>
           <RouterLink :to="{ name: 'my-listings' }">Mijn verkoop</RouterLink>
           <RouterLink :to="{ name: 'cart' }">Winkelmand</RouterLink>
-          <RouterLink :to="{ name: 'orders' }">Orders</RouterLink>
+          <RouterLink :to="{ name: 'orders' }">Mijn aankopen</RouterLink>
+          <RouterLink :to="{ name: 'seller-orders' }">Mijn verkopen</RouterLink>
         </template>
       </nav>
       <BaseButton v-if="auth.isAuthenticated" variant="secondary" @click="logout">Uitloggen</BaseButton>

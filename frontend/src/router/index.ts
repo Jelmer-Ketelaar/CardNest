@@ -47,6 +47,8 @@ export const router = createRouter({
     { path: '/my-listings', name: 'my-listings', component: MyListingsPage, meta: { requiresAuth: true } },
     { path: '/cart', name: 'cart', component: CartPage, meta: { requiresAuth: true } },
     { path: '/orders', name: 'orders', component: OrdersPage, meta: { requiresAuth: true } },
+    { path: '/orders/sales', name: 'seller-orders', component: OrdersPage, meta: { requiresAuth: true } },
+    { path: '/orders/:id', name: 'order-detail', component: OrdersPage, meta: { requiresAuth: true } },
   ],
 })
 
