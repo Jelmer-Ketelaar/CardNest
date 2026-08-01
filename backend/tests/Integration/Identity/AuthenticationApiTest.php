@@ -77,6 +77,39 @@ final class AuthenticationApiTest extends WebTestCase
         self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
     }
 
+    public function testInvalidCredentialsReturnTheSameSafeAuthenticationError(): void
+    {
+        // Arrange
+        $email = sprintf('login-%s@example.com', Uuid::v7()->toRfc4122());
+        $password = 'A-strong-password-123';
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => $email,
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(201);
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/auth/login', ['email' => $email, 'password' => 'wrong-password']);
+        $wrongPasswordResponse = $this->responseData()['error'] ?? null;
+
+        // Assert
+        self::assertResponseStatusCodeSame(401);
+        self::assertIsArray($wrongPasswordResponse);
+        self::assertSame('invalid_credentials', $wrongPasswordResponse['code'] ?? null);
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/auth/login', [
+            'email' => sprintf('unknown-%s@example.com', Uuid::v7()->toRfc4122()),
+            'password' => 'wrong-password',
+        ]);
+        $unknownEmailResponse = $this->responseData()['error'] ?? null;
+
+        // Assert
+        self::assertResponseStatusCodeSame(401);
+        self::assertSame($wrongPasswordResponse, $unknownEmailResponse);
+    }
+
     public function testProtectedEndpointReturnsStructuredAuthenticationError(): void
     {
         // Arrange
