@@ -73,11 +73,52 @@ final class AuthenticationApiTest extends WebTestCase
         $headers = ['HTTP_ACCEPT' => 'application/json'];
 
         // Act
-        $this->client->request('POST', '/api/v1/auth/logout', server: $headers);
+        $this->client->request('GET', '/api/v1/me', server: $headers);
 
         // Assert
         self::assertResponseStatusCodeSame(401);
         self::assertSame('authentication_required', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testAuthenticatedUserCanRetrieveTheirSafeProfile(): void
+    {
+        // Arrange
+        $email = sprintf('current-user-%s@example.com', Uuid::v7()->toRfc4122());
+        $password = 'A-strong-password-123';
+        $this->jsonRequest('POST', '/api/v1/auth/register', [
+            'email' => $email,
+            'password' => $password,
+            'passwordConfirmation' => $password,
+        ]);
+        self::assertResponseStatusCodeSame(201);
+        $registeredUser = $this->responseData()['user'] ?? null;
+        self::assertIsArray($registeredUser);
+        self::assertIsString($registeredUser['id'] ?? null);
+
+        $this->jsonRequest('POST', '/api/v1/auth/login', ['email' => $email, 'password' => $password]);
+        self::assertResponseIsSuccessful();
+        $token = $this->responseData()['token'] ?? null;
+        self::assertIsString($token);
+
+        // Act
+        $this->client->request('GET', '/api/v1/me', server: [
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$token,
+        ]);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $user = $this->responseData()['user'] ?? null;
+        self::assertIsArray($user);
+        self::assertSame($registeredUser['id'], $user['id'] ?? null);
+        self::assertSame($email, $user['email'] ?? null);
+        self::assertSame(['ROLE_USER'], $user['roles'] ?? null);
+        self::assertArrayHasKey('emailVerifiedAt', $user);
+        self::assertNull($user['emailVerifiedAt']);
+        self::assertIsString($user['createdAt'] ?? null);
+        self::assertArrayNotHasKey('password', $user);
+        self::assertArrayNotHasKey('passwordHash', $user);
+        self::assertArrayNotHasKey('token', $user);
     }
 
     /** @param array<string, string> $payload */

@@ -31,6 +31,23 @@ rate-limited (5/minute) per normalized e-mail + client IP; exceeding it returns 
 
 `POST /api/v1/auth/logout` revokes the current bearer token and returns `204`.
 
+`GET /api/v1/me` requires a bearer token and returns the authenticated user's safe profile data:
+
+```json
+{
+  "user": {
+    "id": "0198d5ea-37c8-7dd4-a993-48ea916b7e19",
+    "email": "collector@example.com",
+    "roles": ["ROLE_USER"],
+    "emailVerifiedAt": null,
+    "createdAt": "2026-08-01T10:30:00+00:00"
+  }
+}
+```
+
+The response never contains a password hash, bearer token, reset token, or other credential data. Missing or invalid
+authentication returns the standard `401` JSON error.
+
 ## Card catalog
 
 Read-only and public. Describes official card data only — never a card a specific user owns.
