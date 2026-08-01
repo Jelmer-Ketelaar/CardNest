@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
@@ -14,9 +14,10 @@ const route = useRoute()
 const listings = ref<Listing[]>([])
 const collectionItems = ref<CollectionItem[]>([])
 const loading = ref(false)
-const saving = ref(false)
+const savingAction = ref<'save-draft' | 'publish-new' | 'publish' | 'cancel' | null>(null)
 const error = ref('')
 const success = ref('')
+const fieldErrors = ref<Record<string, string[]>>({})
 const form = reactive({
   collectionItemId: '',
   price: '',
@@ -27,6 +28,17 @@ const form = reactive({
   backImageUrl: '',
   expiresAt: '',
   description: '',
+})
+
+const isSaving = computed(() => savingAction.value !== null)
+const eligibleCollectionItems = computed(() => {
+  const unavailableItemIds = new Set(
+    listings.value
+      .filter((listing) => ['draft', 'pending_review', 'active', 'reserved', 'sold'].includes(listing.status))
+      .flatMap((listing) => listing.collectionItemId === undefined ? [] : [listing.collectionItemId]),
+  )
+
+  return collectionItems.value.filter((item) => !unavailableItemIds.has(item.id))
 })
 
 function caughtMessage(caught: unknown, fallback: string): string {
@@ -44,9 +56,9 @@ function statusLabel(status: Listing['status']): string {
   }[status]
 }
 
-async function loadData(): Promise<void> {
+async function loadData(clearError = true): Promise<void> {
   loading.value = true
-  error.value = ''
+  if (clearError) error.value = ''
   try {
     const [listingResponse, collectionResponse] = await Promise.all([
       apiRequest<PaginatedResponse<Listing>>('/me/listings'),
@@ -55,10 +67,10 @@ async function loadData(): Promise<void> {
     listings.value = listingResponse.items
     collectionItems.value = collectionResponse.items
     const requestedItem = typeof route.query.itemId === 'string' ? route.query.itemId : ''
-    if (requestedItem && collectionItems.value.some((item) => item.id === requestedItem)) {
+    if (requestedItem && eligibleCollectionItems.value.some((item) => item.id === requestedItem)) {
       form.collectionItemId = requestedItem
-    } else if (!form.collectionItemId && collectionItems.value[0]) {
-      form.collectionItemId = collectionItems.value[0].id
+    } else if (!eligibleCollectionItems.value.some((item) => item.id === form.collectionItemId)) {
+      form.collectionItemId = eligibleCollectionItems.value[0]?.id ?? ''
     }
   } catch (caught) {
     error.value = caughtMessage(caught, 'Je verkoopgegevens konden niet worden geladen.')
@@ -67,91 +79,161 @@ async function loadData(): Promise<void> {
   }
 }
 
-async function createAndPublish(): Promise<void> {
-  error.value = ''
-  success.value = ''
-  if (!form.collectionItemId) {
-    error.value = 'Selecteer een beschikbare fysieke kaart.'
-    return
-  }
+function resetForm(): void {
+  form.collectionItemId = ''
+  form.price = ''
+  form.letterMailPrice = '150'
+  form.parcelPrice = ''
+  form.pickupAllowed = false
+  form.frontImageUrl = ''
+  form.backImageUrl = ''
+  form.expiresAt = ''
+  form.description = ''
+}
 
-  let price: number | null
-  let letterMailPrice: number | null
-  let parcelPrice: number | null
+function addFieldError(field: string, message: string): void {
+  fieldErrors.value = { ...fieldErrors.value, [field]: [message] }
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function createPayload(): Record<string, boolean | number | string> | null {
+  fieldErrors.value = {}
+  if (!form.collectionItemId) addFieldError('collectionItemId', 'Selecteer een beschikbare fysieke kaart.')
+
+  let price: number | null = null
+  let letterMailPrice: number | null = null
+  let parcelPrice: number | null = null
   try {
     price = parseOptionalMinorUnits(form.price)
+  } catch (caught) {
+    addFieldError('price', caughtMessage(caught, 'Gebruik een heel bedrag in centen.'))
+  }
+  try {
     letterMailPrice = parseOptionalMinorUnits(form.letterMailPrice)
+  } catch (caught) {
+    addFieldError('letterMailPrice', caughtMessage(caught, 'Gebruik een heel bedrag in centen.'))
+  }
+  try {
     parcelPrice = parseOptionalMinorUnits(form.parcelPrice)
   } catch (caught) {
-    error.value = caughtMessage(caught, 'Gebruik hele bedragen in centen.')
-    return
+    addFieldError('parcelPrice', caughtMessage(caught, 'Gebruik een heel bedrag in centen.'))
   }
-  if (price === null || price <= 0) {
-    error.value = 'De vraagprijs moet groter zijn dan nul.'
-    return
+  if (price === null && fieldErrors.value.price === undefined) {
+    addFieldError('price', 'De vraagprijs moet groter zijn dan nul.')
+  } else if (price !== null && price <= 0) {
+    addFieldError('price', 'De vraagprijs moet groter zijn dan nul.')
   }
   if (letterMailPrice === null && parcelPrice === null && !form.pickupAllowed) {
-    error.value = 'Kies minimaal één verzend- of afhaaloptie.'
-    return
+    if (fieldErrors.value.letterMailPrice === undefined && fieldErrors.value.parcelPrice === undefined) {
+      addFieldError('letterMailPrice', 'Kies minimaal één verzend- of afhaaloptie.')
+    }
   }
+  if (!isHttpsUrl(form.frontImageUrl)) addFieldError('frontImageUrl', 'Gebruik een geldige HTTPS-link voor de voorkant.')
+  if (!isHttpsUrl(form.backImageUrl)) addFieldError('backImageUrl', 'Gebruik een geldige HTTPS-link voor de achterkant.')
+  if (form.expiresAt && Number.isNaN(new Date(form.expiresAt).valueOf())) {
+    addFieldError('expiresAt', 'Kies een geldige einddatum.')
+  }
+  if (Object.keys(fieldErrors.value).length > 0 || price === null) return null
 
   const payload: Record<string, boolean | number | string> = {
     collectionItemId: form.collectionItemId,
     price,
     currency: 'EUR',
     pickupAllowed: form.pickupAllowed,
-    frontImageUrl: form.frontImageUrl,
-    backImageUrl: form.backImageUrl,
+    frontImageUrl: form.frontImageUrl.trim(),
+    backImageUrl: form.backImageUrl.trim(),
   }
   if (letterMailPrice !== null) payload.letterMailPrice = letterMailPrice
   if (parcelPrice !== null) payload.parcelPrice = parcelPrice
   if (form.description.trim()) payload.description = form.description.trim()
   if (form.expiresAt) payload.expiresAt = new Date(form.expiresAt).toISOString()
 
-  saving.value = true
+  return payload
+}
+
+function handleActionError(caught: unknown, fallback: string): void {
+  if (caught instanceof ApiError) {
+    error.value = caught.message
+    fieldErrors.value = caught.details
+
+    return
+  }
+
+  error.value = fallback
+}
+
+async function createListing(publish: boolean): Promise<void> {
+  if (isSaving.value) return
+
+  error.value = ''
+  success.value = ''
+  const payload = createPayload()
+  if (payload === null) return
+
+  savingAction.value = publish ? 'publish-new' : 'save-draft'
   try {
     const draft = await apiRequest<Listing>('/listings', { method: 'POST', body: JSON.stringify(payload) })
-    await apiRequest<Listing>(`/listings/${draft.id}/publish`, { method: 'POST' })
-    form.price = ''
-    form.frontImageUrl = ''
-    form.backImageUrl = ''
-    form.description = ''
-    form.expiresAt = ''
-    success.value = 'De fysieke kaart staat nu actief te koop.'
-    await loadData()
+    if (publish) {
+      await apiRequest<Listing>(`/listings/${draft.id}/publish`, { method: 'POST' })
+      success.value = 'De fysieke kaart staat nu actief te koop.'
+    } else {
+      success.value = 'Concept opgeslagen. Publiceer de listing wanneer je klaar bent.'
+    }
+    resetForm()
   } catch (caught) {
-    error.value = caughtMessage(caught, 'De listing kon niet worden gepubliceerd.')
-    await loadData()
+    handleActionError(caught, publish ? 'De listing kon niet worden gepubliceerd.' : 'Het concept kon niet worden opgeslagen.')
   } finally {
-    saving.value = false
+    savingAction.value = null
+    await loadData(false)
   }
 }
 
+async function saveDraft(): Promise<void> {
+  await createListing(false)
+}
+
+async function createAndPublish(): Promise<void> {
+  await createListing(true)
+}
+
 async function publishListing(listing: Listing): Promise<void> {
-  saving.value = true
+  if (isSaving.value) return
+
+  savingAction.value = 'publish'
   error.value = ''
+  fieldErrors.value = {}
   try {
     await apiRequest<Listing>(`/listings/${listing.id}/publish`, { method: 'POST' })
     success.value = 'De conceptlisting is gepubliceerd.'
-    await loadData()
   } catch (caught) {
-    error.value = caughtMessage(caught, 'De listing kon niet worden gepubliceerd.')
+    handleActionError(caught, 'De listing kon niet worden gepubliceerd.')
   } finally {
-    saving.value = false
+    savingAction.value = null
+    await loadData(false)
   }
 }
 
 async function cancelListing(listing: Listing): Promise<void> {
-  saving.value = true
+  if (isSaving.value) return
+
+  savingAction.value = 'cancel'
   error.value = ''
+  fieldErrors.value = {}
   try {
     await apiRequest<Listing>(`/listings/${listing.id}/cancel`, { method: 'POST' })
     success.value = 'De listing is geannuleerd; de kaart is weer beschikbaar in je collectie.'
-    await loadData()
   } catch (caught) {
-    error.value = caughtMessage(caught, 'De listing kon niet worden geannuleerd.')
+    handleActionError(caught, 'De listing kon niet worden geannuleerd.')
   } finally {
-    saving.value = false
+    savingAction.value = null
+    await loadData(false)
   }
 }
 
@@ -177,31 +259,55 @@ onMounted(() => { void loadData() })
         <h2>Kaart te koop zetten</h2>
         <label class="field">
           <span>Fysiek exemplaar</span>
-          <select v-model="form.collectionItemId" required>
+          <select
+            v-model="form.collectionItemId"
+            required
+            :aria-invalid="Boolean(fieldErrors.collectionItemId?.[0])"
+            :aria-describedby="fieldErrors.collectionItemId?.[0] ? 'listing-collection-item-error' : undefined"
+          >
             <option value="">Selecteer een kaart</option>
-            <option v-for="item in collectionItems" :key="item.id" :value="item.id">
+            <option v-for="item in eligibleCollectionItems" :key="item.id" :value="item.id">
               {{ item.card.name }} · {{ item.card.number }} · {{ readableCode(item.condition) }}
             </option>
           </select>
+          <span v-if="fieldErrors.collectionItemId?.[0]" id="listing-collection-item-error" class="field-error">
+            {{ fieldErrors.collectionItemId[0] }}
+          </span>
         </label>
-        <BaseInput id="listing-price" v-model="form.price" label="Vaste vraagprijs (centen)" type="number" min="1" required />
+        <BaseInput id="listing-price" v-model="form.price" label="Vaste vraagprijs (centen)" type="number" min="1" required :error="fieldErrors.price?.[0]" />
         <div class="compact-fields">
-          <BaseInput id="letter-mail-price" v-model="form.letterMailPrice" label="Brievenbuspost (centen)" type="number" min="0" />
-          <BaseInput id="parcel-price" v-model="form.parcelPrice" label="Pakketpost (centen)" type="number" min="0" />
+          <BaseInput id="letter-mail-price" v-model="form.letterMailPrice" label="Brievenbuspost (centen)" type="number" min="0" :error="fieldErrors.letterMailPrice?.[0]" />
+          <BaseInput id="parcel-price" v-model="form.parcelPrice" label="Pakketpost (centen)" type="number" min="0" :error="fieldErrors.parcelPrice?.[0]" />
         </div>
         <label class="checkbox-field">
           <input v-model="form.pickupAllowed" type="checkbox">
           <span>Ophalen toegestaan (€0)</span>
         </label>
-        <BaseInput id="front-image-url" v-model="form.frontImageUrl" label="HTTPS-foto voorkant" type="url" required />
-        <BaseInput id="back-image-url" v-model="form.backImageUrl" label="HTTPS-foto achterkant" type="url" required />
-        <BaseInput id="listing-expiration" v-model="form.expiresAt" label="Einddatum (optioneel)" type="datetime-local" />
+        <BaseInput id="front-image-url" v-model="form.frontImageUrl" label="HTTPS-foto voorkant" type="url" required :error="fieldErrors.frontImageUrl?.[0]" />
+        <BaseInput id="back-image-url" v-model="form.backImageUrl" label="HTTPS-foto achterkant" type="url" required :error="fieldErrors.backImageUrl?.[0]" />
+        <BaseInput id="listing-expiration" v-model="form.expiresAt" label="Einddatum (optioneel)" type="datetime-local" :error="fieldErrors.expiresAt?.[0]" />
         <label class="field">
           <span>Aanvullende omschrijving</span>
-          <textarea v-model="form.description" rows="4" maxlength="5000" />
+          <textarea
+            v-model="form.description"
+            rows="4"
+            maxlength="5000"
+            :aria-invalid="Boolean(fieldErrors.description?.[0])"
+            :aria-describedby="fieldErrors.description?.[0] ? 'listing-description-error' : undefined"
+          />
+          <span v-if="fieldErrors.description?.[0]" id="listing-description-error" class="field-error">
+            {{ fieldErrors.description[0] }}
+          </span>
         </label>
-        <p class="form-help">Foto-uploads via object storage volgen als afzonderlijke infrastructuurstap; deze versie accepteert uitsluitend HTTPS-verwijzingen.</p>
-        <BaseButton type="submit" :disabled="saving || loading">{{ saving ? 'Publiceren…' : 'Direct publiceren' }}</BaseButton>
+        <p class="form-help">Sla eerst een concept op als je nog niet wilt publiceren. Foto-uploads via object storage volgen als afzonderlijke infrastructuurstap; deze versie accepteert uitsluitend HTTPS-verwijzingen.</p>
+        <div class="dialog-actions">
+          <BaseButton type="button" variant="secondary" :disabled="isSaving || loading" @click="saveDraft">
+            {{ savingAction === 'save-draft' ? 'Opslaan…' : 'Concept opslaan' }}
+          </BaseButton>
+          <BaseButton type="submit" :disabled="isSaving || loading">
+            {{ savingAction === 'publish-new' ? 'Publiceren…' : 'Direct publiceren' }}
+          </BaseButton>
+        </div>
       </form>
 
       <section class="seller-listings" aria-labelledby="seller-listings-heading">
@@ -220,8 +326,12 @@ onMounted(() => { void loadData() })
             <strong>{{ formatMoney(listing.price.amount, listing.price.currency) }}</strong>
           </div>
           <div class="seller-listing-actions">
-            <BaseButton v-if="listing.status === 'draft'" :disabled="saving" @click="publishListing(listing)">Publiceren</BaseButton>
-            <BaseButton v-if="['draft', 'active'].includes(listing.status)" variant="danger" :disabled="saving" @click="cancelListing(listing)">Annuleren</BaseButton>
+            <BaseButton v-if="listing.status === 'draft'" :disabled="isSaving" @click="publishListing(listing)">
+              {{ savingAction === 'publish' ? 'Publiceren…' : 'Publiceren' }}
+            </BaseButton>
+            <BaseButton v-if="['draft', 'active'].includes(listing.status)" variant="danger" :disabled="isSaving" @click="cancelListing(listing)">
+              {{ savingAction === 'cancel' ? 'Annuleren…' : 'Annuleren' }}
+            </BaseButton>
           </div>
         </article>
       </section>
