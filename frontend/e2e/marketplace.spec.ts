@@ -116,9 +116,13 @@ test('a collector can publish a physical collection item', async ({ page }) => {
   await page.getByLabel('Vaste vraagprijs (centen)').fill('750')
   await page.getByLabel('HTTPS-foto voorkant').fill('https://images.example/front.jpg')
   await page.getByLabel('HTTPS-foto achterkant').fill('https://images.example/back.jpg')
-  await page.getByRole('button', { name: 'Direct publiceren' }).click()
+  await page.getByRole('button', { name: 'Concept opslaan' }).click()
 
-  await expect(page.getByText('De fysieke kaart staat nu actief te koop.')).toBeVisible()
+  await expect(page.getByText('Concept opgeslagen. Publiceer de listing wanneer je klaar bent.')).toBeVisible()
+  await expect(page.getByText('Concept', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Publiceren', exact: true }).click()
+
+  await expect(page.getByText('De conceptlisting is gepubliceerd.')).toBeVisible()
   await expect(page.getByText('Actief', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Mudkip · 19/25' })).toBeVisible()
 })
