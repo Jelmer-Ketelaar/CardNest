@@ -59,6 +59,9 @@ services:
     App\Collection\Domain\Repository\CollectionItemRepository:
         alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionItemRepository
 
+    App\Collection\Domain\Repository\CollectionRepository:
+        alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionRepository
+
     App\Storage\Domain\Repository\StorageLocationRepository:
         alias: App\Storage\Infrastructure\Persistence\DoctrineStorageLocationRepository
 

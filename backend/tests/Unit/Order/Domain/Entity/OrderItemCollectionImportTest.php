@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Marketplace\Domain\Entity\Listing;
@@ -85,7 +86,7 @@ final class OrderItemCollectionImportTest extends TestCase
         $this->complete($order, $buyer, $seller);
         $source->completeSale();
         $imported = new CollectionItem(
-            $buyer,
+            new Collection($buyer),
             $source->getCatalogCard(),
             $source->getVariant(),
             CardLanguage::French,
@@ -111,7 +112,7 @@ final class OrderItemCollectionImportTest extends TestCase
         $set = new CardSet($series, 'Promo set', 'promo', 'en', 25, 25, status: CardSetStatus::Active);
         $card = new CatalogCard($set, 'Mudkip', '19/25', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $source = new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $source = new CollectionItem(new Collection($seller), $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $listing = new Listing(
             $seller,
             $source,
@@ -152,7 +153,7 @@ final class OrderItemCollectionImportTest extends TestCase
     private function buyerItem(CollectionItem $source, User $buyer, OrderItem $orderItem, Order $order): CollectionItem
     {
         return new CollectionItem(
-            $buyer,
+            new Collection($buyer),
             $source->getCatalogCard(),
             $source->getVariant(),
             CardLanguage::French,

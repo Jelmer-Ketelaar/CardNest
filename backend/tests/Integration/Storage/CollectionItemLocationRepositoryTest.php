@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Storage\Domain\Entity\StorageLocation;
@@ -25,6 +26,7 @@ final class CollectionItemLocationRepositoryTest extends KernelTestCase
     private EntityManagerInterface $entityManager;
     private CollectionItemLocationRepository $repository;
     private User $owner;
+    private Collection $collection;
     private CollectionItem $item;
     private StorageLocation $firstLocation;
     private StorageLocation $secondLocation;
@@ -35,7 +37,8 @@ final class CollectionItemLocationRepositoryTest extends KernelTestCase
         $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
         $this->repository = self::getContainer()->get(CollectionItemLocationRepository::class);
         $this->owner = new User('owner-'.Uuid::v7()->toRfc4122().'@example.com', 'hash');
-        $this->item = $this->createItem($this->owner);
+        $this->collection = new Collection($this->owner);
+        $this->item = $this->createItem($this->collection);
         $this->firstLocation = new StorageLocation($this->owner, 'Binderkast', StorageLocationType::Other);
         $this->secondLocation = new StorageLocation(
             $this->owner,
@@ -44,6 +47,7 @@ final class CollectionItemLocationRepositoryTest extends KernelTestCase
             $this->firstLocation,
         );
         $this->entityManager->persist($this->owner);
+        $this->entityManager->persist($this->collection);
         $this->entityManager->persist($this->firstLocation);
         $this->entityManager->persist($this->secondLocation);
         $this->entityManager->flush();
@@ -83,7 +87,7 @@ final class CollectionItemLocationRepositoryTest extends KernelTestCase
         self::assertCount(1, $this->repository->historyForItem($this->item));
     }
 
-    private function createItem(User $owner): CollectionItem
+    private function createItem(Collection $collection): CollectionItem
     {
         $suffix = Uuid::v7()->toRfc4122();
         $series = new CardSeries('Series '.$suffix);
@@ -98,7 +102,7 @@ final class CollectionItemLocationRepositoryTest extends KernelTestCase
         );
         $card = new CatalogCard($set, 'Mudkip', '19/25', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($owner, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $item = new CollectionItem($collection, $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $this->entityManager->persist($series);
         $this->entityManager->persist($set);
         $this->entityManager->persist($card);

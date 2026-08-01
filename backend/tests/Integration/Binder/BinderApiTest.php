@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
@@ -338,22 +339,23 @@ final class BinderApiTest extends WebTestCase
         $mudkipVariant = $mudkip->addVariant(VariantCode::Holo);
         $pikachu = new CatalogCard($set, 'Pikachu', '25/25', 'Promo', 'Collectible');
         $pikachuVariant = $pikachu->addVariant(VariantCode::Normal);
+        $collection = new Collection($owner);
         $firstMudkip = new CollectionItem(
-            $owner,
+            $collection,
             $mudkip,
             $mudkipVariant,
             CardLanguage::English,
             CardCondition::NearMint,
         );
         $secondMudkip = new CollectionItem(
-            $owner,
+            $collection,
             $mudkip,
             $mudkipVariant,
             CardLanguage::English,
             CardCondition::Good,
         );
         $pikachuItem = new CollectionItem(
-            $owner,
+            $collection,
             $pikachu,
             $pikachuVariant,
             CardLanguage::English,
@@ -363,6 +365,7 @@ final class BinderApiTest extends WebTestCase
         $this->entityManager->persist($set);
         $this->entityManager->persist($mudkip);
         $this->entityManager->persist($pikachu);
+        $this->entityManager->persist($collection);
         $this->entityManager->persist($firstMudkip);
         $this->entityManager->persist($secondMudkip);
         $this->entityManager->persist($pikachuItem);

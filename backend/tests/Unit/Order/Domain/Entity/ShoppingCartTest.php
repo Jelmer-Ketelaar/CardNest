@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Marketplace\Domain\Entity\Listing;
@@ -81,7 +82,7 @@ final class ShoppingCartTest extends TestCase
         $card = new CatalogCard($set, 'Mudkip', '19/25', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
         $ownedItem = new CollectionItem(
-            $seller,
+            new Collection($seller),
             $card,
             $variant,
             CardLanguage::English,

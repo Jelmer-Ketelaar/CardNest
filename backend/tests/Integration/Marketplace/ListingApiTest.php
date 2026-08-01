@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
@@ -363,11 +364,13 @@ final class ListingApiTest extends WebTestCase
         $set = new CardSet($series, 'Promo set', 'promo-'.$suffix, 'en', 25, 25, status: CardSetStatus::Active);
         $card = new CatalogCard($set, 'Mudkip', '19/25', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $first = new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::NearMint);
-        $second = new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::Good);
+        $collection = new Collection($seller);
+        $first = new CollectionItem($collection, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $second = new CollectionItem($collection, $card, $variant, CardLanguage::English, CardCondition::Good);
         $this->entityManager->persist($series);
         $this->entityManager->persist($set);
         $this->entityManager->persist($card);
+        $this->entityManager->persist($collection);
         $this->entityManager->persist($first);
         $this->entityManager->persist($second);
 

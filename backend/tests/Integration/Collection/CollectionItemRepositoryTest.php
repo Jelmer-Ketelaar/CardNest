@@ -12,6 +12,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Repository\CollectionItemRepository;
 use App\Collection\Domain\Repository\CollectionItemSearchCriteria;
@@ -25,6 +26,7 @@ final class CollectionItemRepositoryTest extends KernelTestCase
     private EntityManagerInterface $entityManager;
     private CollectionItemRepository $repository;
     private User $owner;
+    private Collection $collection;
     private CardSet $set;
     private CatalogCard $card;
     private CardVariant $normalVariant;
@@ -37,18 +39,22 @@ final class CollectionItemRepositoryTest extends KernelTestCase
         $this->entityManager = $container->get(EntityManagerInterface::class);
         $this->repository = $container->get(CollectionItemRepository::class);
         $this->owner = new User('owner-'.Uuid::v7()->toRfc4122().'@example.com', 'hash');
+        $this->collection = new Collection($this->owner);
         [$this->set, $this->card, $this->normalVariant, $this->holoVariant] = $this->createCatalog();
         $this->entityManager->persist($this->owner);
+        $this->entityManager->persist($this->collection);
     }
 
     public function testSearchFiltersOwnerCardSetLanguageVariantConditionAndStatus(): void
     {
         // Arrange
-        $matching = $this->item($this->owner, $this->normalVariant, CardLanguage::English, CardCondition::NearMint);
-        $this->item($this->owner, $this->holoVariant, CardLanguage::Japanese, CardCondition::Mint);
+        $matching = $this->item($this->collection, $this->normalVariant, CardLanguage::English, CardCondition::NearMint);
+        $this->item($this->collection, $this->holoVariant, CardLanguage::Japanese, CardCondition::Mint);
         $otherOwner = new User('other-'.Uuid::v7()->toRfc4122().'@example.com', 'hash');
+        $otherCollection = new Collection($otherOwner);
         $this->entityManager->persist($otherOwner);
-        $this->item($otherOwner, $this->normalVariant, CardLanguage::English, CardCondition::NearMint);
+        $this->entityManager->persist($otherCollection);
+        $this->item($otherCollection, $this->normalVariant, CardLanguage::English, CardCondition::NearMint);
         $this->entityManager->flush();
 
         // Act
@@ -71,10 +77,10 @@ final class CollectionItemRepositoryTest extends KernelTestCase
     public function testDuplicateCountsAreOwnerScopedAndExcludeArchivedItems(): void
     {
         // Arrange
-        $first = $this->item($this->owner, $this->normalVariant, CardLanguage::English, CardCondition::NearMint);
-        $this->item($this->owner, $this->normalVariant, CardLanguage::English, CardCondition::Good);
+        $first = $this->item($this->collection, $this->normalVariant, CardLanguage::English, CardCondition::NearMint);
+        $this->item($this->collection, $this->normalVariant, CardLanguage::English, CardCondition::Good);
         $archived = $this->item(
-            $this->owner,
+            $this->collection,
             $this->normalVariant,
             CardLanguage::English,
             CardCondition::Played,
@@ -114,12 +120,12 @@ final class CollectionItemRepositoryTest extends KernelTestCase
     }
 
     private function item(
-        User $owner,
+        Collection $collection,
         CardVariant $variant,
         CardLanguage $language,
         CardCondition $condition,
     ): CollectionItem {
-        $item = new CollectionItem($owner, $this->card, $variant, $language, $condition);
+        $item = new CollectionItem($collection, $this->card, $variant, $language, $condition);
         $this->entityManager->persist($item);
 
         return $item;
