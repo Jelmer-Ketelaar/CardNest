@@ -58,6 +58,7 @@ test('a visitor can compare the complete listing price', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Mudkip 19/25' })).toBeVisible()
   await expect(page.getByText(/vanaf\s+€\s*7,50 totaal/)).toBeVisible()
   await page.getByRole('button', { name: 'Bekijk aanbieding' }).click()
+  await expect(page).toHaveURL(`/marketplace/listings/${listing.id}`)
   await expect(page.getByRole('heading', { name: 'Volledige prijzen' })).toBeVisible()
   await expect(page.getByText(/€\s*9,00 totaal/)).toBeVisible()
   await expect(page.locator('.shipping-totals').getByText(/^€\s*7,50 totaal$/)).toBeVisible()

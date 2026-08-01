@@ -33,6 +33,7 @@ export const router = createRouter({
     { path: '/catalog/cards', name: 'catalog-cards', component: CatalogCardsPage },
     { path: '/catalog/cards/:id', name: 'catalog-card', component: CatalogCardDetailPage },
     { path: '/marketplace', name: 'marketplace', component: MarketplacePage },
+    { path: '/marketplace/listings/:id', name: 'marketplace-listing', component: MarketplacePage },
     { path: '/users/:id', name: 'user-profile', component: UserProfilePage },
     { path: '/account', name: 'account', component: AccountPage, meta: { requiresAuth: true } },
     { path: '/dashboard', name: 'dashboard', component: DashboardPage, meta: { requiresAuth: true } },
