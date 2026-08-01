@@ -52,6 +52,16 @@ final class AuthenticationApiTest extends WebTestCase
 
         // Assert
         self::assertResponseStatusCodeSame(204);
+
+        // Act
+        $this->client->request('GET', '/api/v1/me', server: [
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer '.$login['token'],
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(401);
+        self::assertSame('authentication_failed', $this->responseData()['error']['code'] ?? null);
     }
 
     public function testInvalidRegistrationReturnsStructuredValidationErrors(): void
