@@ -36,4 +36,26 @@ describe('router authentication guard', () => {
     // Assert
     expect(router.currentRoute.value.name).toBe('catalog-sets')
   })
+
+  it('allows an unauthenticated visitor to view a catalog set', async () => {
+    // Act
+    await router.push({ name: 'catalog-set', params: { id: 'set-id' } })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('catalog-set')
+  })
+
+  it('allows an unauthenticated visitor to browse and view catalog cards', async () => {
+    // Act
+    await router.push({ name: 'catalog-cards', query: { setId: 'set-id' } })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('catalog-cards')
+
+    // Act
+    await router.push({ name: 'catalog-card', params: { id: 'card-id' } })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('catalog-card')
+  })
 })
