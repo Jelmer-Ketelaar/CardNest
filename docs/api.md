@@ -211,6 +211,10 @@ while `path` returns the complete root-to-location trail needed to answer “whe
 `parentId` is optional and must identify another location owned by the caller. `GET
 /api/v1/me/storage-locations/{id}` returns one location. `PATCH /api/v1/me/storage-locations/{id}` changes `name`,
 `type`, or its parent; use `clearParent: true` to move it to the root. Cycles and cross-owner parents return `422`.
+`DELETE /api/v1/me/storage-locations/{id}` returns `204` for an empty, unreferenced location. To preserve a card's
+physical-history trail, a location with child locations, a binder association, or any current or past item placement
+cannot be deleted and returns `409 storage_location_in_use`; move cards and binders first, then retain or rename the
+historical location instead.
 
 `POST /api/v1/me/collection-items/{itemId}/location` places or moves one physical card into a generic storage
 location atomically:
@@ -758,6 +762,7 @@ Every error response follows the same shape:
 | `collection_item_archived` | 409 | Attempted to change an archived collection item |
 | `collection_item_listed` | 409 | Attempted to change or archive a physical item currently for sale |
 | `storage_location_not_found` | 404 | Location doesn't exist, or isn't owned by the caller |
+| `storage_location_in_use` | 409 | Location has child locations, a binder, or item location history |
 | `invalid_storage_hierarchy` | 422 | Parent creates a cycle or belongs to another user |
 | `binder_not_found` | 404 | Binder/slot doesn't exist, or isn't owned by the caller |
 | `binder_slot_occupied` | 409 | Another physical item already occupies the target slot |
