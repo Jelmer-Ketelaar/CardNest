@@ -74,4 +74,24 @@ describe('router authentication guard', () => {
     // Assert
     expect(router.currentRoute.value.name).toBe('login')
   })
+
+  it('redirects an unauthenticated visitor away from order pages', async () => {
+    // Act
+    await router.push({ name: 'orders' })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('login')
+
+    // Act
+    await router.push({ name: 'seller-orders' })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('login')
+
+    // Act
+    await router.push({ name: 'order-detail', params: { id: 'order-id' } })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('login')
+  })
 })
