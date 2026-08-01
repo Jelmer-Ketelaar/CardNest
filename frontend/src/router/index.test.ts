@@ -20,4 +20,12 @@ describe('router authentication guard', () => {
     // Assert
     expect(router.currentRoute.value.name).toBe('login')
   })
+
+  it('allows an unauthenticated visitor to open the health page', async () => {
+    // Act
+    await router.push({ name: 'health' })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('health')
+  })
 })
