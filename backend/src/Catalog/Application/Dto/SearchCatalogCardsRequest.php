@@ -9,6 +9,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 final readonly class SearchCatalogCardsRequest
 {
+    /** @param list<string> $artistIds */
     public function __construct(
         #[Assert\Uuid]
         public ?string $setId = null,
@@ -22,6 +23,10 @@ final readonly class SearchCatalogCardsRequest
         public ?string $rarity = null,
         #[Assert\Choice(callback: [VariantCode::class, 'values'])]
         public ?string $variant = null,
+        #[Assert\All(constraints: [new Assert\Uuid()])]
+        public array $artistIds = [],
+        #[Assert\Length(max: 180)]
+        public ?string $artist = null,
         #[Assert\Range(min: 1)]
         public int $page = 1,
         #[Assert\Range(min: 1, max: 100)]

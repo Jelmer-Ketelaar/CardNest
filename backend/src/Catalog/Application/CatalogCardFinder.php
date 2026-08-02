@@ -27,6 +27,8 @@ final readonly class CatalogCardFinder
             number: $request->number,
             rarity: $request->rarity,
             variant: null !== $request->variant ? VariantCode::from($request->variant) : null,
+            artistIds: $request->artistIds,
+            artist: $request->artist,
             page: $request->page,
             perPage: $request->perPage,
         );

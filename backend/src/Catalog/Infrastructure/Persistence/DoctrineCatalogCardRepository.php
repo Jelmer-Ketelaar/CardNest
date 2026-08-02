@@ -23,13 +23,13 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
     public function search(CatalogCardSearchCriteria $criteria): CatalogCardSearchResult
     {
         $total = (int) $this->baseQuery($criteria)
-            ->select('COUNT(c.id)')
+            ->select('COUNT(DISTINCT c.id)')
             ->getQuery()
             ->getSingleScalarResult();
 
         /** @var list<CatalogCard> $items */
         $items = $this->baseQuery($criteria)
-            ->select('c', 's', 'se')
+            ->select('c', 's', 'se', 'artistLink', 'artist')
             ->orderBy('c.name', 'ASC')
             ->addOrderBy('c.numberSortKey', 'ASC')
             ->setFirstResult(($criteria->page - 1) * $criteria->perPage)
@@ -61,7 +61,9 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
         $qb = $this->entityManager->createQueryBuilder()
             ->from(CatalogCard::class, 'c')
             ->join('c.set', 's')
-            ->join('s.series', 'se');
+            ->join('s.series', 'se')
+            ->leftJoin('c.artistLinks', 'artistLink')
+            ->leftJoin('artistLink.artist', 'artist');
 
         if (null !== $criteria->setId) {
             $qb->andWhere('s.id = :setId')->setParameter('setId', Uuid::fromString($criteria->setId), UuidType::NAME);
@@ -92,6 +94,23 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
                 ->join('c.variants', 'v')
                 ->andWhere('v.code = :variant')
                 ->setParameter('variant', $criteria->variant->value);
+        }
+
+        if ($criteria->artistIds !== []) {
+            $artistIds = [];
+            foreach ($criteria->artistIds as $artistId) {
+                $artistIds[] = Uuid::fromString($artistId);
+            }
+
+            $qb
+                ->andWhere('artist.id IN (:artistIds)')
+                ->setParameter('artistIds', $artistIds, UuidType::NAME);
+        }
+
+        if ($criteria->artist !== null && trim($criteria->artist) !== '') {
+            $qb
+                ->andWhere('LOWER(artist.canonicalName) LIKE :artist')
+                ->setParameter('artist', '%'.mb_strtolower(trim($criteria->artist)).'%');
         }
 
         return $qb;

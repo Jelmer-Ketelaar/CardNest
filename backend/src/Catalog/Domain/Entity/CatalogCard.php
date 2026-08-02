@@ -53,6 +53,15 @@ final class CatalogCard
     )]
     private Collection $externalReferences;
 
+    /** @var Collection<int, CatalogCardArtist> */
+    #[ORM\OneToMany(
+        mappedBy: 'catalogCard',
+        targetEntity: CatalogCardArtist::class,
+        cascade: ['persist'],
+        orphanRemoval: true,
+    )]
+    private Collection $artistLinks;
+
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $updatedAt;
 
@@ -90,6 +99,7 @@ final class CatalogCard
         $this->numberSortKey = CardNumberSortKey::generate($number);
         $this->variants = new ArrayCollection();
         $this->externalReferences = new ArrayCollection();
+        $this->artistLinks = new ArrayCollection();
         $this->updatedAt = $createdAt;
     }
 
@@ -141,6 +151,26 @@ final class CatalogCard
     public function getIllustrator(): ?string
     {
         return $this->illustrator;
+    }
+
+    /** @return Collection<int, CatalogCardArtist> */
+    public function getArtistLinks(): Collection
+    {
+        return $this->artistLinks;
+    }
+
+    public function addArtist(Artist $artist, string $role = 'primary_illustrator'): CatalogCardArtist
+    {
+        foreach ($this->artistLinks as $artistLink) {
+            if ($artistLink->getArtist()->getId()->equals($artist->getId())) {
+                return $artistLink;
+            }
+        }
+
+        $artistLink = new CatalogCardArtist($this, $artist, $role, $this->artistLinks->count());
+        $this->artistLinks->add($artistLink);
+
+        return $artistLink;
     }
 
     public function getImageUrl(): ?string

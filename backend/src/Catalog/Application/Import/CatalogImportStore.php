@@ -7,6 +7,7 @@ namespace App\Catalog\Application\Import;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CatalogCard;
+use App\Catalog\Domain\Entity\Artist;
 
 /**
  * Persistence port optimized for a large catalog import. It deliberately
@@ -22,7 +23,9 @@ interface CatalogImportStore
 
     public function findCardByExternalReference(string $sourceName, string $externalId): ?CatalogCard;
 
-    public function persist(CardSeries|CardSet|CatalogCard $entity): void;
+    public function findArtistByNormalizedName(string $normalizedName): ?Artist;
+
+    public function persist(CardSeries|CardSet|CatalogCard|Artist $entity): void;
 
     public function flush(): void;
 

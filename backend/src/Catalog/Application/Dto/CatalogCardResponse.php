@@ -7,6 +7,7 @@ namespace App\Catalog\Application\Dto;
 use App\Catalog\Domain\Entity\CardExternalReference;
 use App\Catalog\Domain\Entity\CardVariant;
 use App\Catalog\Domain\Entity\CatalogCard;
+use App\Catalog\Domain\Entity\CatalogCardArtist;
 
 final readonly class CatalogCardResponse
 {
@@ -26,6 +27,15 @@ final readonly class CatalogCardResponse
             'cardType' => $this->card->getCardType(),
             'primaryCollectible' => $this->card->getPrimaryCollectible(),
             'illustrator' => $this->card->getIllustrator(),
+            'artists' => array_map(
+                static fn (CatalogCardArtist $artistLink): array => [
+                    'id' => $artistLink->getArtist()->getId()->toRfc4122(),
+                    'name' => $artistLink->getArtist()->getCanonicalName(),
+                    'slug' => $artistLink->getArtist()->getSlug(),
+                    'role' => $artistLink->getRole(),
+                ],
+                $this->card->getArtistLinks()->toArray(),
+            ),
             'imageUrl' => $this->card->getImageUrl(),
             'thumbnailUrl' => $this->card->getThumbnailUrl(),
             'releaseDate' => $this->card->getReleaseDate()?->format('Y-m-d'),

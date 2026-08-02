@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CatalogCard;
+use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Provider\CardCatalogProvider;
 use App\Catalog\Domain\Provider\ImportedCardSet;
 use App\Catalog\Domain\Provider\ImportedCatalogCard;
@@ -145,6 +146,8 @@ final readonly class ImportCatalog
                 $card->addVariant($variant);
             }
 
+            $this->attachImportedArtist($card, $importedCard->illustrator);
+
             $card->addExternalReference(self::SOURCE_NAME, $externalId, $importedCard->rawData);
             $this->store->persist($card);
             $result->recordCreatedCard();
@@ -167,6 +170,7 @@ final readonly class ImportCatalog
                             variants: $importedCard->variants,
                             metadata: $importedCard->metadata,
                         );
+                        $this->attachImportedArtist($card, $importedCard->illustrator);
                     }
                     $reference->markSynced($importedCard->rawData);
                 } elseif (!$this->containsDetailedSourceData($reference->getRawData())) {
@@ -208,5 +212,21 @@ final readonly class ImportCatalog
     private function containsDetailedSourceData(array $rawData): bool
     {
         return array_key_exists('category', $rawData) || array_key_exists('variants', $rawData);
+    }
+
+    private function attachImportedArtist(CatalogCard $card, ?string $illustrator): void
+    {
+        if ($illustrator === null || Artist::canonicalizeName($illustrator) === '') {
+            return;
+        }
+
+        $normalizedName = Artist::normalizeName($illustrator);
+        $artist = $this->store->findArtistByNormalizedName($normalizedName);
+        if (!$artist instanceof Artist) {
+            $artist = Artist::fromCanonicalName($illustrator);
+            $this->store->persist($artist);
+        }
+
+        $card->addArtist($artist);
     }
 }

@@ -8,6 +8,7 @@ use App\Catalog\Application\Import\CatalogImportStore;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CatalogCard;
+use App\Catalog\Domain\Entity\Artist;
 use Doctrine\ORM\EntityManagerInterface;
 
 final readonly class DoctrineCatalogImportStore implements CatalogImportStore
@@ -57,7 +58,14 @@ final readonly class DoctrineCatalogImportStore implements CatalogImportStore
         return $card;
     }
 
-    public function persist(CardSeries|CardSet|CatalogCard $entity): void
+    public function findArtistByNormalizedName(string $normalizedName): ?Artist
+    {
+        $artist = $this->entityManager->getRepository(Artist::class)->findOneBy(['normalizedName' => $normalizedName]);
+
+        return $artist instanceof Artist ? $artist : null;
+    }
+
+    public function persist(CardSeries|CardSet|CatalogCard|Artist $entity): void
     {
         $this->entityManager->persist($entity);
     }

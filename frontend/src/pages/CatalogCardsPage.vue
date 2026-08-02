@@ -23,6 +23,7 @@ interface SearchFilters {
   number: string
   rarity: string
   variant: string
+  artist: string
 }
 
 const route = useRoute()
@@ -58,6 +59,7 @@ function filtersFromQuery(query: Record<string, unknown>): SearchFilters {
     number: queryValue(query.number),
     rarity: queryValue(query.rarity),
     variant: queryValue(query.variant),
+    artist: queryValue(query.artist),
   }
 }
 
@@ -139,7 +141,7 @@ watch(
       <div>
         <p class="eyebrow">Officiële kaartgegevens</p>
         <h1>Kaarten zoeken</h1>
-        <p>Zoek op naam, nummer, set, serie, rarity of variant.</p>
+        <p>Zoek op naam, nummer, set, serie, rarity, variant of artist.</p>
       </div>
       <RouterLink class="button button--secondary" :to="{ name: 'catalog-sets' }">Bekijk kaartsets</RouterLink>
     </header>
@@ -148,6 +150,7 @@ watch(
       <BaseInput id="catalog-card-name" v-model="filters.name" label="Kaartnaam" type="search" />
       <BaseInput id="catalog-card-number" v-model="filters.number" label="Kaartnummer" />
       <BaseInput id="catalog-card-rarity" v-model="filters.rarity" label="Rarity" />
+      <BaseInput id="catalog-card-artist" v-model="filters.artist" label="Artist / illustrator" type="search" />
       <label class="field">
         <span>Variant</span>
         <select v-model="filters.variant">
@@ -181,6 +184,7 @@ watch(
             <p class="eyebrow">{{ card.set.name }}</p>
             <h2>{{ card.name }} <small>{{ card.number }}</small></h2>
             <p>{{ card.rarity }} · {{ card.variants.map((variant) => readableCode(variant.code)).join(', ') }}</p>
+            <p v-if="card.artists?.length">{{ card.artists.map((artist) => artist.name).join(', ') }}</p>
           </div>
         </RouterLink>
       </section>

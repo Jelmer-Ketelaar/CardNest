@@ -3,6 +3,13 @@ export interface CatalogCardVariant {
   code: string
 }
 
+export interface CardArtist {
+  id: string
+  name: string
+  slug: string
+  role: string
+}
+
 export interface CardSeries {
   id: string
   name: string
@@ -32,6 +39,7 @@ export interface CatalogCard {
   rarity: string
   imageUrl: string | null
   thumbnailUrl: string | null
+  artists: CardArtist[]
   set: {
     id: string
     name: string

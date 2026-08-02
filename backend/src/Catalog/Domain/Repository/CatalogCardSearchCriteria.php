@@ -15,6 +15,9 @@ final readonly class CatalogCardSearchCriteria
         public ?string $number = null,
         public ?string $rarity = null,
         public ?VariantCode $variant = null,
+        /** @var list<string> */
+        public array $artistIds = [],
+        public ?string $artist = null,
         public int $page = 1,
         public int $perPage = 20,
     ) {
