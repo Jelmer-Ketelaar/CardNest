@@ -23,6 +23,8 @@ final readonly class CheckoutResponse
             'payment' => [
                 'id' => $this->payment->getId()->toRfc4122(),
                 'status' => $this->payment->getStatus()->value,
+                'finalizationStatus' => $this->payment->getFinalizationStatus()->value,
+                'idempotencyKey' => $this->payment->getIdempotencyKey(),
                 'provider' => $this->payment->getProviderName(),
                 'providerReference' => $this->payment->getProviderReference(),
                 'amount' => $this->payment->getAmount()->toArray(),

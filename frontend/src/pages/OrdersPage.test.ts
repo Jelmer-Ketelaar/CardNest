@@ -116,7 +116,7 @@ describe('OrdersPage', () => {
     const shippedOrder = {
       ...order,
       status: 'shipped' as const,
-      availableActions: { markShipped: false, confirmReceived: false },
+      availableActions: { cancel: false, markShipped: false, confirmReceived: false },
       statusHistory: [
         ...order.statusHistory,
         { id: 'history-shipped', from: 'paid' as const, to: 'shipped' as const, actor: { id: 'current-user' }, occurredAt: '2026-08-01T12:00:00+00:00' },
@@ -164,7 +164,7 @@ describe('OrdersPage', () => {
     const order: Order = {
       ...orderFixture({ id: 'completed-order', buyerId: 'current-user' }),
       status: 'completed',
-      availableActions: { markShipped: false, confirmReceived: false },
+      availableActions: { cancel: false, markShipped: false, confirmReceived: false },
       completedAt: '2026-08-01T12:00:00+00:00',
     }
     mocks.apiRequest.mockImplementation((path: string, options?: RequestInit) => {
@@ -221,7 +221,7 @@ describe('OrdersPage', () => {
     const order: Order = {
       ...orderFixture({ id: 'completed-order', buyerId: 'current-user' }),
       status: 'completed',
-      availableActions: { markShipped: false, confirmReceived: false },
+      availableActions: { cancel: false, markShipped: false, confirmReceived: false },
       completedAt: '2026-08-01T12:00:00+00:00',
     }
     mocks.apiRequest.mockImplementation((path: string, options?: RequestInit) => {
@@ -323,6 +323,8 @@ function orderFixture(overrides: Partial<{ id: string; buyerId: string; sellerId
       provider: 'fake',
       providerReference: 'fake-reference',
     },
+    cancellation: null,
+    refund: null,
     statusHistory: [{
       id: 'history-paid',
       from: 'pending_payment',
@@ -330,7 +332,7 @@ function orderFixture(overrides: Partial<{ id: string; buyerId: string; sellerId
       actor: { id: overrides.buyerId ?? 'buyer-id' },
       occurredAt: '2026-08-01T10:30:00+00:00',
     }],
-    availableActions: { markShipped: true, confirmReceived: false },
+    availableActions: { cancel: true, markShipped: true, confirmReceived: false },
     paidAt: '2026-08-01T10:30:00+00:00',
     completedAt: null,
     createdAt: '2026-08-01T10:30:00+00:00',

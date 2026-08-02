@@ -69,8 +69,9 @@ final readonly class DoctrineCollectionItemLocationRepository implements Collect
     public function placeInBinderSlot(CollectionItem $item, BinderSlot $slot): CollectionItemLocationHistory
     {
         return $this->entityManager->wrapInTransaction(function () use ($item, $slot): CollectionItemLocationHistory {
-            $this->entityManager->lock($item, LockMode::PESSIMISTIC_WRITE);
+            // Binder-slot mutations always lock the target slot before an item.
             $this->entityManager->lock($slot, LockMode::PESSIMISTIC_WRITE);
+            $this->entityManager->lock($item, LockMode::PESSIMISTIC_WRITE);
             $target = $this->findCurrentForBinderSlot($slot);
             if ($target instanceof CollectionItemLocationHistory
                 && !$target->getCollectionItem()->getId()->equals($item->getId())) {

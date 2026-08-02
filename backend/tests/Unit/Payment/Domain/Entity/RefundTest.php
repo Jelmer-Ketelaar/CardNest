@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Marketplace\Domain\Entity\Listing;
@@ -95,7 +96,13 @@ final class RefundTest extends TestCase
         $set = new CardSet($series, 'Promo set', 'promo', 'en', 1, 1, status: CardSetStatus::Active);
         $card = new CatalogCard($set, 'Mudkip', '1/1', 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $item = new CollectionItem(
+            collection: new Collection($seller),
+            catalogCard: $card,
+            variant: $variant,
+            language: CardLanguage::English,
+            condition: CardCondition::NearMint,
+        );
         $listing = new Listing(
             seller: $seller,
             collectionItem: $item,
@@ -109,7 +116,7 @@ final class RefundTest extends TestCase
         $listing->setWorkflowStatus('reserved');
         $item->markForSale();
         $payment = new Payment($buyer, new Money(2_250, 'EUR'), 'fake');
-        $payment->recordResult(PaymentResult::succeeded('fake_payment'));
+        $payment->recordResult(PaymentResult::succeeded(new Money(2_250, 'EUR'), 'fake_payment'));
         $order = new Order(
             buyer: $buyer,
             seller: $seller,

@@ -32,6 +32,9 @@ final readonly class CheckoutCartRequest
         public string $city,
         #[Assert\Choice(choices: ['NL', 'BE'])]
         public string $countryCode,
+        #[Assert\Length(min: 8, max: 100)]
+        #[Assert\Regex(pattern: '/\A[A-Za-z0-9._:-]+\z/')]
+        public ?string $idempotencyKey = null,
     ) {
     }
 

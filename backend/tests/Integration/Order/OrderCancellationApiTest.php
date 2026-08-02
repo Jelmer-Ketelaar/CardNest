@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
@@ -423,7 +424,8 @@ final class OrderCancellationApiTest extends WebTestCase
         $set = new CardSet($series, 'Cancellation set '.$suffix, 'cancel-'.$suffix, 'en', 1, 1, status: CardSetStatus::Active);
         $card = new CatalogCard($set, $name, '1/1', 'Rare', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $collection = new Collection($seller);
+        $item = new CollectionItem($collection, $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $listing = new Listing(
             seller: $seller,
             collectionItem: $item,
@@ -439,6 +441,7 @@ final class OrderCancellationApiTest extends WebTestCase
         $this->entityManager->persist($series);
         $this->entityManager->persist($set);
         $this->entityManager->persist($card);
+        $this->entityManager->persist($collection);
         $this->entityManager->persist($item);
         $this->entityManager->persist($listing);
 

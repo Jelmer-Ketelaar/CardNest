@@ -166,6 +166,8 @@ final class CheckoutApiTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $checkout = $this->responseData();
         self::assertSame('succeeded', $checkout['payment']['status'] ?? null);
+        self::assertSame('finalized', $checkout['payment']['finalizationStatus'] ?? null);
+        self::assertIsString($checkout['payment']['idempotencyKey'] ?? null);
         self::assertSame('fake', $checkout['payment']['provider'] ?? null);
         self::assertStringStartsWith('fake_', (string) ($checkout['payment']['providerReference'] ?? ''));
         self::assertSame(3995, $checkout['payment']['amount']['amount'] ?? null);
@@ -279,10 +281,10 @@ final class CheckoutApiTest extends WebTestCase
         self::assertSame('active', $this->responseData()['status'] ?? null);
 
         $connection = $this->entityManager->getConnection();
-        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM orders'));
-        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM payments'));
-        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM payment_transactions'));
-        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM listing_reservations'));
+        self::assertSame(1, (int) $connection->fetchOne("SELECT COUNT(*) FROM orders WHERE status = 'cancelled'"));
+        self::assertSame(1, (int) $connection->fetchOne("SELECT COUNT(*) FROM payments WHERE status = 'failed' AND finalization_status = 'released'"));
+        self::assertSame(1, (int) $connection->fetchOne("SELECT COUNT(*) FROM payment_transactions WHERE status = 'failed'"));
+        self::assertSame(1, (int) $connection->fetchOne("SELECT COUNT(*) FROM listing_reservations WHERE status = 'released'"));
     }
 
     public function testSellerShipsAndBuyerCompletesOrderWithCollectionArchival(): void

@@ -17,7 +17,9 @@ use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Repository\CollectionItemRepository;
 use App\Collection\Domain\Repository\CollectionItemSearchCriteria;
 use App\Identity\Domain\Entity\User;
+use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
 
@@ -43,6 +45,45 @@ final class CollectionItemRepositoryTest extends KernelTestCase
         [$this->set, $this->card, $this->normalVariant, $this->holoVariant] = $this->createCatalog();
         $this->entityManager->persist($this->owner);
         $this->entityManager->persist($this->collection);
+    }
+
+    #[DataProvider('cardLanguages')]
+    public function testEveryCardLanguagePersistsAndRoundTrips(CardLanguage $language): void
+    {
+        // Arrange
+        $item = $this->item($this->collection, $this->normalVariant, $language, CardCondition::NearMint);
+        $ownerId = $this->owner->getId();
+        $itemId = $item->getId()->toRfc4122();
+        $this->entityManager->flush();
+        $this->entityManager->clear();
+        $owner = $this->entityManager->find(User::class, $ownerId);
+        self::assertInstanceOf(User::class, $owner);
+
+        // Act
+        $persisted = $this->repository->getForOwner($itemId, $owner);
+
+        // Assert
+        self::assertInstanceOf(CollectionItem::class, $persisted);
+        self::assertSame($language, $persisted->getLanguage());
+    }
+
+    public function testDatabaseRejectsUnknownCardLanguage(): void
+    {
+        // Arrange
+        $item = $this->item(
+            $this->collection,
+            $this->normalVariant,
+            CardLanguage::English,
+            CardCondition::NearMint,
+        );
+        $this->entityManager->flush();
+        $this->expectException(DriverException::class);
+
+        // Act
+        $this->entityManager->getConnection()->executeStatement(
+            'UPDATE collection_items SET language = :language WHERE id = :id',
+            ['language' => 'xx', 'id' => $item->getId()->toRfc4122()],
+        );
     }
 
     public function testSearchFiltersOwnerCardSetLanguageVariantConditionAndStatus(): void
@@ -93,6 +134,14 @@ final class CollectionItemRepositoryTest extends KernelTestCase
 
         // Assert
         self::assertSame(2, $counts[$first->duplicateKey()] ?? null);
+    }
+
+    /** @return iterable<string, array{CardLanguage}> */
+    public static function cardLanguages(): iterable
+    {
+        foreach (CardLanguage::cases() as $language) {
+            yield $language->name => [$language];
+        }
     }
 
     /** @return array{CardSet, CatalogCard, CardVariant, CardVariant} */

@@ -107,6 +107,9 @@ services:
     App\Payment\Domain\Provider\PaymentProvider:
         alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
 
+    App\Order\Application\CheckoutFaultInjector:
+        alias: App\Order\Application\NullCheckoutFaultInjector
+
     App\Shipping\Domain\Repository\ShipmentRepository:
         alias: App\Shipping\Infrastructure\Persistence\DoctrineShipmentRepository
 
@@ -132,4 +135,8 @@ when@test:
     services:
         App\Payment\Domain\Provider\PaymentProvider:
             alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
+            public: true
+
+        App\Order\Application\CheckoutFaultInjector:
+            alias: App\Order\Application\NullCheckoutFaultInjector
             public: true

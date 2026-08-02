@@ -7,6 +7,8 @@ namespace App\Payment\Infrastructure\Provider;
 use App\Payment\Domain\Provider\PaymentInstruction;
 use App\Payment\Domain\Provider\PaymentProvider;
 use App\Payment\Domain\Provider\PaymentResult;
+use App\Payment\Domain\Provider\RefundInstruction;
+use App\Payment\Domain\Provider\RefundResult;
 
 final readonly class FailingFakePaymentProvider implements PaymentProvider
 {
@@ -18,5 +20,10 @@ final readonly class FailingFakePaymentProvider implements PaymentProvider
     public function charge(PaymentInstruction $instruction): PaymentResult
     {
         return PaymentResult::failed($instruction->amount, 'De testbetaling is afgewezen.');
+    }
+
+    public function refund(RefundInstruction $instruction): RefundResult
+    {
+        return RefundResult::failed('De testterugbetaling is afgewezen.');
     }
 }

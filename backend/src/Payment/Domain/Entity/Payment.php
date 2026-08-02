@@ -6,6 +6,7 @@ namespace App\Payment\Domain\Entity;
 
 use App\Identity\Domain\Entity\User;
 use App\Order\Domain\Entity\Order;
+use App\Order\Domain\Entity\ShoppingCart;
 use App\Payment\Domain\Exception\InvalidPayment;
 use App\Payment\Domain\Provider\PaymentResult;
 use App\Shared\Domain\ValueObject\Money;
@@ -20,6 +21,8 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'payments')]
 #[ORM\Index(name: 'idx_payments_buyer_created', columns: ['buyer_id', 'created_at'])]
+#[ORM\Index(name: 'idx_payments_finalization', columns: ['finalization_status', 'created_at'])]
+#[ORM\UniqueConstraint(name: 'uniq_payment_idempotency_key', columns: ['idempotency_key'])]
 #[ORM\UniqueConstraint(
     name: 'uniq_payment_provider_reference',
     columns: ['provider_name', 'provider_reference'],
@@ -36,11 +39,36 @@ final class Payment
     #[ORM\OrderBy(['createdAt' => 'ASC'])]
     private Collection $transactions;
 
+    #[ORM\ManyToOne(targetEntity: ShoppingCart::class)]
+    #[ORM\JoinColumn(name: 'checkout_cart_id', nullable: true, onDelete: 'SET NULL')]
+    private readonly ?ShoppingCart $checkoutCart;
+
+    #[ORM\Column(name: 'idempotency_key', length: 255)]
+    private readonly string $idempotencyKey;
+
+    #[ORM\Column(name: 'request_fingerprint', length: 64, nullable: true)]
+    private readonly ?string $requestFingerprint;
+
+    #[ORM\Column(name: 'cart_fingerprint', length: 64, nullable: true)]
+    private readonly ?string $cartFingerprint;
+
+    #[ORM\Column(name: 'finalization_status', length: 30, enumType: PaymentFinalizationStatus::class)]
+    private PaymentFinalizationStatus $finalizationStatus;
+
     #[ORM\Column(name: 'provider_reference', length: 180, nullable: true)]
     private ?string $providerReference = null;
 
     #[ORM\Column(name: 'completed_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $completedAt = null;
+
+    #[ORM\Column(name: 'provider_result_recorded_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?DateTimeImmutable $providerResultRecordedAt = null;
+
+    #[ORM\Column(name: 'finalization_attempted_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?DateTimeImmutable $finalizationAttemptedAt = null;
+
+    #[ORM\Column(name: 'finalized_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?DateTimeImmutable $finalizedAt = null;
 
     #[ORM\Column(name: 'updated_at', type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $updatedAt;
@@ -52,6 +80,10 @@ final class Payment
         Money $amount,
         #[ORM\Column(name: 'provider_name', length: 50)]
         private readonly string $providerName,
+        ?string $idempotencyKey = null,
+        ?ShoppingCart $checkoutCart = null,
+        ?string $requestFingerprint = null,
+        ?string $cartFingerprint = null,
         #[ORM\Column(length: 20, enumType: PaymentStatus::class)]
         private PaymentStatus $status = PaymentStatus::Pending,
         #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
@@ -65,8 +97,27 @@ final class Payment
         }
 
         $this->id = Uuid::v7();
+        $idempotencyKey = trim($idempotencyKey ?? 'payment_'.$this->id->toRfc4122());
+        if ($idempotencyKey === '' || mb_strlen($idempotencyKey) > 255) {
+            throw new InvalidPayment('Een betaling vereist een idempotentiesleutel van maximaal 255 tekens.');
+        }
+        if ($checkoutCart instanceof ShoppingCart) {
+            if (!self::isFingerprint($requestFingerprint) || !self::isFingerprint($cartFingerprint)) {
+                throw new InvalidPayment('Een checkoutbetaling vereist geldige aanvraag- en winkelmandvingerafdrukken.');
+            }
+        } elseif ($requestFingerprint !== null || $cartFingerprint !== null) {
+            throw new InvalidPayment('Checkoutvingerafdrukken vereisen een gekoppelde winkelmand.');
+        }
+
         $this->amount = $amount->amount;
         $this->currency = $amount->currency;
+        $this->checkoutCart = $checkoutCart;
+        $this->idempotencyKey = $idempotencyKey;
+        $this->requestFingerprint = $requestFingerprint;
+        $this->cartFingerprint = $cartFingerprint;
+        $this->finalizationStatus = $checkoutCart instanceof ShoppingCart
+            ? PaymentFinalizationStatus::Pending
+            : PaymentFinalizationStatus::NotRequired;
         $this->transactions = new ArrayCollection();
         $this->updatedAt = $createdAt;
     }
@@ -105,6 +156,31 @@ final class Payment
     public function getStatus(): PaymentStatus
     {
         return $this->status;
+    }
+
+    public function getCheckoutCart(): ?ShoppingCart
+    {
+        return $this->checkoutCart;
+    }
+
+    public function getIdempotencyKey(): string
+    {
+        return $this->idempotencyKey;
+    }
+
+    public function getRequestFingerprint(): ?string
+    {
+        return $this->requestFingerprint;
+    }
+
+    public function getCartFingerprint(): ?string
+    {
+        return $this->cartFingerprint;
+    }
+
+    public function getFinalizationStatus(): PaymentFinalizationStatus
+    {
+        return $this->finalizationStatus;
     }
 
     /** @return Collection<int, PaymentTransaction> */
@@ -152,7 +228,55 @@ final class Payment
         }
 
         $this->completedAt = $now;
+        $this->providerResultRecordedAt = $now;
         $this->updatedAt = $now;
+    }
+
+    public function markFinalizationAttempted(DateTimeImmutable $attemptedAt = new DateTimeImmutable()): void
+    {
+        if ($this->status !== PaymentStatus::Succeeded
+            || $this->finalizationStatus !== PaymentFinalizationStatus::Pending) {
+            throw new InvalidPayment('Alleen een geslaagde, nog niet afgeronde checkout kan worden gefinaliseerd.');
+        }
+
+        $this->finalizationAttemptedAt = $attemptedAt;
+        $this->updatedAt = $attemptedAt;
+    }
+
+    public function markFinalized(DateTimeImmutable $finalizedAt = new DateTimeImmutable()): void
+    {
+        if ($this->status !== PaymentStatus::Succeeded
+            || $this->finalizationStatus !== PaymentFinalizationStatus::Pending) {
+            throw new InvalidPayment('Alleen een geslaagde, nog niet afgeronde checkout kan worden voltooid.');
+        }
+
+        $this->finalizationStatus = PaymentFinalizationStatus::Finalized;
+        $this->finalizedAt = $finalizedAt;
+        $this->updatedAt = $finalizedAt;
+    }
+
+    public function markReservationsReleased(DateTimeImmutable $releasedAt = new DateTimeImmutable()): void
+    {
+        if ($this->status !== PaymentStatus::Failed
+            || $this->finalizationStatus !== PaymentFinalizationStatus::Pending) {
+            throw new InvalidPayment('Alleen een afgewezen checkout kan worden vrijgegeven.');
+        }
+
+        $this->finalizationStatus = PaymentFinalizationStatus::Released;
+        $this->finalizedAt = $releasedAt;
+        $this->updatedAt = $releasedAt;
+    }
+
+    public function getFailureReason(): ?string
+    {
+        foreach ($this->transactions as $transaction) {
+            if ($transaction->getType() === PaymentTransactionType::Charge
+                && $transaction->getStatus() === PaymentTransactionStatus::Failed) {
+                return $transaction->getFailureReason();
+            }
+        }
+
+        return null;
     }
 
     public function recordSuccessfulRefund(Refund $refund, DateTimeImmutable $processedAt = new DateTimeImmutable()): void
@@ -220,6 +344,21 @@ final class Payment
         return $this->completedAt;
     }
 
+    public function getProviderResultRecordedAt(): ?DateTimeImmutable
+    {
+        return $this->providerResultRecordedAt;
+    }
+
+    public function getFinalizationAttemptedAt(): ?DateTimeImmutable
+    {
+        return $this->finalizationAttemptedAt;
+    }
+
+    public function getFinalizedAt(): ?DateTimeImmutable
+    {
+        return $this->finalizedAt;
+    }
+
     public function getCreatedAt(): DateTimeImmutable
     {
         return $this->createdAt;
@@ -228,5 +367,10 @@ final class Payment
     public function getUpdatedAt(): DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    private static function isFingerprint(?string $fingerprint): bool
+    {
+        return $fingerprint !== null && preg_match('/\A[a-f0-9]{64}\z/', $fingerprint) === 1;
     }
 }

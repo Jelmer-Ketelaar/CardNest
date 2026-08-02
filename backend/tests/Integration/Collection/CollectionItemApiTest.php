@@ -188,6 +188,20 @@ final class CollectionItemApiTest extends WebTestCase
         self::assertSame('in_collection', $this->responseData()['status'] ?? null);
     }
 
+    public function testCreateRejectsUnknownLanguage(): void
+    {
+        // Arrange
+        $payload = $this->validCreatePayload();
+        $payload['language'] = 'xx';
+
+        // Act
+        $this->jsonRequest('POST', '/api/v1/me/collection-items', $payload, $this->ownerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
     public function testCreateRejectsVariantFromAnotherCardAndIncompleteMoney(): void
     {
         // Arrange

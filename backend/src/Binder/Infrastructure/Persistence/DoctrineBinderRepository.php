@@ -87,6 +87,40 @@ final readonly class DoctrineBinderRepository implements BinderRepository
         return $slot;
     }
 
+    public function lockSlotForOwner(string $binderId, string $slotId, User $owner): ?BinderSlot
+    {
+        $binderUuid = $this->parseUuid($binderId);
+        $slotUuid = $this->parseUuid($slotId);
+        if (!$binderUuid instanceof Uuid || !$slotUuid instanceof Uuid) {
+            return null;
+        }
+
+        $locked = $this->entityManager->getConnection()->fetchOne(
+            <<<'SQL'
+                SELECT slot.id
+                FROM binder_slots slot
+                INNER JOIN binder_pages page ON page.id = slot.binder_page_id
+                INNER JOIN binders binder ON binder.id = page.binder_id
+                WHERE slot.id = CAST(:slot_id AS uuid)
+                  AND binder.id = CAST(:binder_id AS uuid)
+                  AND binder.owner_id = CAST(:owner_id AS uuid)
+                FOR UPDATE OF slot
+                SQL,
+            [
+                'slot_id' => $slotUuid->toRfc4122(),
+                'binder_id' => $binderUuid->toRfc4122(),
+                'owner_id' => $owner->getId()->toRfc4122(),
+            ],
+        );
+        if ($locked === false) {
+            return null;
+        }
+
+        // The application acquires this lock before its first ORM slot lookup,
+        // so the post-lock find hydrates the state committed by the prior holder.
+        return $this->entityManager->find(BinderSlot::class, $slotUuid);
+    }
+
     public function save(Binder $binder): void
     {
         $this->entityManager->persist($binder);

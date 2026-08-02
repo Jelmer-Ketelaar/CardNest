@@ -116,6 +116,11 @@ final readonly class DoctrineListingRepository implements ListingRepository
         return $listing;
     }
 
+    public function lockById(string $id): ?Listing
+    {
+        return $this->lockByIds([$id])[0] ?? null;
+    }
+
     public function lockForCheckout(array $ids): array
     {
         return $this->lockByIds($ids);

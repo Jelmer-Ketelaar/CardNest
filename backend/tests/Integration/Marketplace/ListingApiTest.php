@@ -328,6 +328,45 @@ final class ListingApiTest extends WebTestCase
         self::assertSame('invalid_listing_transition', $this->responseData()['error']['code'] ?? null);
     }
 
+    public function testCancellationConflictsStayGenericAfterAnotherTransitionWins(): void
+    {
+        // Arrange
+        $listingId = $this->createDraft($this->item);
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/publish', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/cancel', $this->otherToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame([
+            'error' => [
+                'code' => 'listing_not_found',
+                'message' => 'Listing niet gevonden.',
+            ],
+        ], $this->responseData());
+
+        // Arrange
+        $this->entityManager->getConnection()->executeStatement(
+            "UPDATE listings SET status = 'sold' WHERE id = :id",
+            ['id' => $listingId],
+        );
+        $this->entityManager->clear();
+
+        // Act
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/cancel', $this->sellerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame([
+            'error' => [
+                'code' => 'invalid_listing_transition',
+                'message' => 'Deze listing kan niet worden geannuleerd.',
+            ],
+        ], $this->responseData());
+    }
+
     public function testDatabaseConstraintRejectsTwoBlockingListingsForOnePhysicalCard(): void
     {
         // Arrange
@@ -494,6 +533,45 @@ final class ListingApiTest extends WebTestCase
         // Assert
         self::assertResponseIsSuccessful();
         self::assertSame(0, $this->responseData()['total'] ?? null);
+    }
+
+    public function testExpirationIsANoOpAfterAnotherTransitionWins(): void
+    {
+        // Arrange
+        $itemId = $this->item->getId()->toRfc4122();
+        $payload = $this->validPayload($this->item);
+        $payload['expiresAt'] = new DateTimeImmutable('+1 hour')->format(DATE_ATOM);
+        $this->jsonRequest('POST', '/api/v1/listings', $payload, $this->sellerToken);
+        self::assertResponseStatusCodeSame(201);
+        $listingId = $this->responseData()['id'] ?? null;
+        self::assertIsString($listingId);
+        $this->authorizedRequest('POST', '/api/v1/listings/'.$listingId.'/publish', $this->sellerToken);
+        self::assertResponseIsSuccessful();
+        $this->entityManager->getConnection()->executeStatement(
+            <<<'SQL'
+                UPDATE listings
+                SET status = 'sold',
+                    created_at = NOW() - INTERVAL '2 hours',
+                    expires_at = NOW() - INTERVAL '1 minute'
+                WHERE id = :id
+                SQL,
+            ['id' => $listingId],
+        );
+        $this->entityManager->clear();
+
+        // Act
+        $handler = self::getContainer()->get(ExpireListingHandler::class);
+        self::assertInstanceOf(ExpireListingHandler::class, $handler);
+        $handler(new ExpireListing($listingId));
+        $handler(new ExpireListing($listingId));
+
+        // Assert
+        $this->authorizedRequest('GET', '/api/v1/me/listings/'.$listingId, $this->sellerToken);
+        self::assertResponseIsSuccessful();
+        self::assertSame('sold', $this->responseData()['status'] ?? null);
+        $this->authorizedRequest('GET', '/api/v1/me/collection-items/'.$itemId, $this->sellerToken);
+        self::assertResponseIsSuccessful();
+        self::assertSame('for_sale', $this->responseData()['status'] ?? null);
     }
 
     private function createDraft(CollectionItem $item): string

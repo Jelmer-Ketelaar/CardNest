@@ -10,9 +10,12 @@ use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CardVariant;
 use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
+use App\Collection\Domain\Entity\CardLanguage;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
+use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Uid\Uuid;
@@ -82,6 +85,67 @@ final class WishlistApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(204);
         $this->authorizedRequest('GET', '/api/v1/me/wishlists/'.$wishlistId, $this->ownerToken);
         self::assertResponseStatusCodeSame(404);
+    }
+
+    #[DataProvider('cardLanguages')]
+    public function testEveryCardLanguagePersistsAndRoundTripsThroughTheApi(CardLanguage $language): void
+    {
+        // Arrange
+        $wishlistId = $this->createWishlist();
+
+        // Act
+        $this->addWishlistItem($wishlistId, [
+            'catalogCardId' => $this->mudkip->getId()->toRfc4122(),
+            'language' => $language->value,
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame($language->value, $this->responseData()['items'][0]['language'] ?? null);
+
+        // Act
+        $this->entityManager->clear();
+        $this->authorizedRequest('GET', '/api/v1/me/wishlists/'.$wishlistId, $this->ownerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame($language->value, $this->responseData()['items'][0]['language'] ?? null);
+    }
+
+    public function testAddingAnItemRejectsUnknownLanguage(): void
+    {
+        // Arrange
+        $wishlistId = $this->createWishlist();
+
+        // Act
+        $this->addWishlistItem($wishlistId, [
+            'catalogCardId' => $this->mudkip->getId()->toRfc4122(),
+            'language' => 'xx',
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testDatabaseRejectsUnknownWishlistLanguage(): void
+    {
+        // Arrange
+        $wishlistId = $this->createWishlist();
+        $this->addWishlistItem($wishlistId, [
+            'catalogCardId' => $this->mudkip->getId()->toRfc4122(),
+            'language' => CardLanguage::English->value,
+        ]);
+        self::assertResponseStatusCodeSame(201);
+        $itemId = $this->responseData()['items'][0]['id'] ?? null;
+        self::assertIsString($itemId);
+        $this->expectException(DriverException::class);
+
+        // Act
+        $this->entityManager->getConnection()->executeStatement(
+            'UPDATE wishlist_items SET desired_language = :language WHERE id = :id',
+            ['language' => 'xx', 'id' => $itemId],
+        );
     }
 
     public function testAddingAnItemCountsMatchingCardsAlreadyInTheCollection(): void
@@ -318,6 +382,14 @@ final class WishlistApiTest extends WebTestCase
         // Assert
         self::assertResponseStatusCodeSame(422);
         self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
+    /** @return iterable<string, array{CardLanguage}> */
+    public static function cardLanguages(): iterable
+    {
+        foreach (CardLanguage::cases() as $language) {
+            yield $language->name => [$language];
+        }
     }
 
     private function createWishlist(): string

@@ -182,7 +182,7 @@ final class BinderApiTest extends WebTestCase
         self::assertCount(2, $history['history'] ?? []);
     }
 
-    public function testReservedAndManualPlaceholdersAreEnforcedAndRetained(): void
+    public function testAssignmentsConsumePlaceholdersAndUnassignDoesNotRecreateThem(): void
     {
         // Arrange
         $binder = $this->createBinder();
@@ -217,9 +217,22 @@ final class BinderApiTest extends WebTestCase
         // Assert
         self::assertResponseIsSuccessful();
         self::assertSame(
-            'Mudkip',
-            $this->responseData()['pages'][0]['slots'][0]['placeholder']['catalogCard']['name'] ?? null,
+            $this->mudkipItem->getId()->toRfc4122(),
+            $this->responseData()['pages'][0]['slots'][0]['collectionItem']['id'] ?? null,
         );
+        self::assertNull($this->responseData()['pages'][0]['slots'][0]['placeholder'] ?? null);
+
+        // Act
+        $this->authorizedRequest(
+            'DELETE',
+            '/api/v1/me/binders/'.$binderId.'/slots/'.$reservedSlotId.'/assignment',
+            $this->ownerToken,
+        );
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertNull($this->responseData()['pages'][0]['slots'][0]['collectionItem'] ?? null);
+        self::assertNull($this->responseData()['pages'][0]['slots'][0]['placeholder'] ?? null);
 
         // Act
         $this->placeholder($binderId, $manualSlotId, ['label' => 'Secret rare']);
@@ -229,11 +242,57 @@ final class BinderApiTest extends WebTestCase
         self::assertSame('Secret rare', $this->responseData()['pages'][0]['slots'][1]['placeholder']['label'] ?? null);
 
         // Act
-        $this->placeholder($binderId, $manualSlotId, ['clear' => true]);
+        $this->assign($binderId, $manualSlotId, $this->secondMudkipItem->getId()->toRfc4122(), $this->ownerToken);
 
         // Assert
         self::assertResponseIsSuccessful();
         self::assertNull($this->responseData()['pages'][0]['slots'][1]['placeholder'] ?? null);
+
+        // Act
+        $this->placeholder($binderId, $manualSlotId, ['label' => 'Must be rejected']);
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('binder_slot_occupied', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->placeholder(
+            $binderId,
+            $manualSlotId,
+            ['catalogCardId' => $this->mudkipCard->getId()->toRfc4122()],
+        );
+
+        // Assert
+        self::assertResponseStatusCodeSame(409);
+        self::assertSame('binder_slot_occupied', $this->responseData()['error']['code'] ?? null);
+    }
+
+    public function testOccupiedSlotNeverReturnsLegacyPlaceholderData(): void
+    {
+        // Arrange
+        $binder = $this->createBinder();
+        $binderId = (string) $binder['id'];
+        $slotId = (string) $binder['pages'][0]['slots'][0]['id'];
+        $itemId = $this->mudkipItem->getId()->toRfc4122();
+        $this->assign($binderId, $slotId, $itemId, $this->ownerToken);
+        self::assertResponseIsSuccessful();
+        $this->entityManager->getConnection()->executeStatement(
+            'UPDATE binder_slots SET reserved_catalog_card_id = CAST(:cardId AS uuid), placeholder_label = :label WHERE id = CAST(:slotId AS uuid)',
+            [
+                'cardId' => $this->mudkipCard->getId()->toRfc4122(),
+                'label' => 'Legacy placeholder',
+                'slotId' => $slotId,
+            ],
+        );
+        $this->entityManager->clear();
+
+        // Act
+        $this->authorizedRequest('GET', '/api/v1/me/binders/'.$binderId, $this->ownerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        self::assertSame($itemId, $this->responseData()['pages'][0]['slots'][0]['collectionItem']['id'] ?? null);
+        self::assertNull($this->responseData()['pages'][0]['slots'][0]['placeholder'] ?? null);
     }
 
     public function testArchivingACollectionItemFreesItsBinderSlotAndKeepsHistory(): void

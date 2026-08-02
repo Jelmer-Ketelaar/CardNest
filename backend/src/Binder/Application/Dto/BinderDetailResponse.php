@@ -55,7 +55,6 @@ final readonly class BinderDetailResponse
     {
         $item = $this->itemsBySlot[$slot->getId()->toRfc4122()] ?? null;
         $card = $item?->getCatalogCard();
-        $reserved = $slot->getReservedCatalogCard();
 
         return [
             'id' => $slot->getId()->toRfc4122(),
@@ -75,16 +74,27 @@ final readonly class BinderDetailResponse
                 'variant' => $item->getVariant()->getCode()->value,
                 'condition' => $item->getCondition()->value,
             ] : null,
-            'placeholder' => $reserved !== null || $slot->getPlaceholderLabel() !== null ? [
-                'catalogCard' => $reserved !== null ? [
-                    'id' => $reserved->getId()->toRfc4122(),
-                    'name' => $reserved->getName(),
-                    'number' => $reserved->getNumber(),
-                    'imageUrl' => $reserved->getImageUrl(),
-                    'thumbnailUrl' => $reserved->getThumbnailUrl(),
-                ] : null,
-                'label' => $slot->getPlaceholderLabel(),
+            'placeholder' => $item instanceof CollectionItem ? null : $this->placeholder($slot),
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function placeholder(BinderSlot $slot): ?array
+    {
+        $reserved = $slot->getReservedCatalogCard();
+        if ($reserved === null && $slot->getPlaceholderLabel() === null) {
+            return null;
+        }
+
+        return [
+            'catalogCard' => $reserved !== null ? [
+                'id' => $reserved->getId()->toRfc4122(),
+                'name' => $reserved->getName(),
+                'number' => $reserved->getNumber(),
+                'imageUrl' => $reserved->getImageUrl(),
+                'thumbnailUrl' => $reserved->getThumbnailUrl(),
             ] : null,
+            'label' => $slot->getPlaceholderLabel(),
         ];
     }
 }

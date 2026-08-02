@@ -17,6 +17,8 @@ interface BinderRepository
 
     public function getSlotForOwner(string $binderId, string $slotId, User $owner): ?BinderSlot;
 
+    public function lockSlotForOwner(string $binderId, string $slotId, User $owner): ?BinderSlot;
+
     public function save(Binder $binder): void;
 
     public function saveSlot(BinderSlot $slot): void;

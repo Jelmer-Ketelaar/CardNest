@@ -95,6 +95,10 @@ final class BinderSlot
 
     public function clearPlaceholder(): void
     {
+        if ($this->reservedCatalogCard === null && $this->placeholderLabel === null) {
+            return;
+        }
+
         $this->reservedCatalogCard = null;
         $this->placeholderLabel = null;
         $this->touch();

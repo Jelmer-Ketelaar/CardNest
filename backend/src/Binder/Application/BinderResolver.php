@@ -29,7 +29,16 @@ final readonly class BinderResolver
 
     public function ownedSlot(string $binderId, string $slotId, User $owner): BinderSlot
     {
-        $slot = $this->binders->getSlotForOwner($binderId, $slotId, $owner);
+        return $this->resolveSlot($this->binders->getSlotForOwner($binderId, $slotId, $owner));
+    }
+
+    public function lockedOwnedSlot(string $binderId, string $slotId, User $owner): BinderSlot
+    {
+        return $this->resolveSlot($this->binders->lockSlotForOwner($binderId, $slotId, $owner));
+    }
+
+    private function resolveSlot(?BinderSlot $slot): BinderSlot
+    {
         if (!$slot instanceof BinderSlot) {
             throw new BinderSlotNotFound('Bindervak niet gevonden.');
         }

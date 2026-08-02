@@ -21,6 +21,8 @@ interface ListingRepository
 
     public function getForSeller(string $id, User $seller): ?Listing;
 
+    public function lockById(string $id): ?Listing;
+
     /**
      * @param list<string> $ids
      *

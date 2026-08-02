@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Payment\Domain\Entity;
 
 use App\Identity\Domain\Entity\User;
+use App\Order\Domain\Entity\ShoppingCart;
 use App\Payment\Domain\Entity\Payment;
+use App\Payment\Domain\Entity\PaymentFinalizationStatus;
 use App\Payment\Domain\Entity\PaymentStatus;
 use App\Payment\Domain\Entity\PaymentTransactionStatus;
 use App\Payment\Domain\Exception\InvalidPayment;
@@ -25,7 +27,9 @@ final class PaymentTest extends TestCase
 
         // Assert
         self::assertSame(PaymentStatus::Succeeded, $payment->getStatus());
+        self::assertSame(PaymentFinalizationStatus::NotRequired, $payment->getFinalizationStatus());
         self::assertSame('fake_reference', $payment->getProviderReference());
+        self::assertNotNull($payment->getProviderResultRecordedAt());
         self::assertCount(1, $payment->getTransactions());
         $transaction = $payment->getTransactions()->first();
         self::assertNotFalse($transaction);
@@ -49,6 +53,32 @@ final class PaymentTest extends TestCase
         self::assertNotFalse($transaction);
         self::assertSame(PaymentTransactionStatus::Failed, $transaction->getStatus());
         self::assertSame('Testbetaling geweigerd.', $transaction->getFailureReason());
+    }
+
+    public function testTracksCheckoutIntentAndFinalizationWithoutPaymentDetails(): void
+    {
+        // Arrange
+        $buyer = new User('checkout-buyer@example.com', 'hash');
+        $payment = new Payment(
+            buyer: $buyer,
+            amount: new Money(1200, 'EUR'),
+            providerName: 'fake',
+            idempotencyKey: 'checkout-stable-key',
+            checkoutCart: new ShoppingCart($buyer),
+            requestFingerprint: str_repeat('a', 64),
+            cartFingerprint: str_repeat('b', 64),
+        );
+
+        // Act
+        $payment->recordResult(PaymentResult::succeeded(new Money(1200, 'EUR'), 'fake_reference'));
+        $payment->markFinalizationAttempted();
+        $payment->markFinalized();
+
+        // Assert
+        self::assertSame('checkout-stable-key', $payment->getIdempotencyKey());
+        self::assertSame(PaymentFinalizationStatus::Finalized, $payment->getFinalizationStatus());
+        self::assertNotNull($payment->getFinalizationAttemptedAt());
+        self::assertNotNull($payment->getFinalizedAt());
     }
 
     public function testRejectsProviderResultForADifferentAmountOrCurrency(): void
