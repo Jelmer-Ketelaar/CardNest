@@ -19,6 +19,8 @@ that a production environment, real payment provider, privacy review or legal ap
 - Seller shipment confirmation, buyer receipt confirmation, collection archival/placement closure and one-time buyer
   collection import after completion.
 - One-per-participant reviews on completed orders and a public, paginated reputation summary.
+- Daily Cardmarket EUR price indications and history on catalog cards, with tracked wishlist/collection/listing
+  refreshes through Symfony Scheduler, Redis Messenger, caching and distributed locks.
 
 ## Engineering foundations
 
@@ -35,8 +37,10 @@ that a production environment, real payment provider, privacy review or legal ap
 - Disputes, chargebacks, moderation and fraud operations are not implemented.
 - There are no partial refunds, partial item/quantity refunds or refund fees. Order cancellation and refunds are not
   released from the current `develop` branch.
-- Notifications, pricing/reporting, trading, auctions, negotiation, card scanning, grading, sealed products, other
+- Notifications, reporting, trading, auctions, negotiation, card scanning, grading, sealed products, other
   TCGs and international shipping remain outside the MVP.
+- External pricing remains an indication rather than guaranteed market value; production display requires a suitable
+  provider agreement and legal approval.
 - Data export and account deletion are documented designs, not product endpoints.
 - This release record is not an accessibility or privacy certification; see the linked checklists for outstanding
   evidence and decisions.

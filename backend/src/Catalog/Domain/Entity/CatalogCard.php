@@ -183,6 +183,46 @@ final class CatalogCard
         return $variant;
     }
 
+    /**
+     * Enriches a catalog card from a detailed provider response. This method
+     * only adds variants, because removing a known official variant during a
+     * source re-sync would be destructive.
+     *
+     * @param list<VariantCode>    $variants
+     * @param array<string, mixed> $metadata
+     */
+    public function synchronizeFromProvider(
+        string $name,
+        string $rarity,
+        string $cardType,
+        ?string $primaryCollectible,
+        ?string $illustrator,
+        ?string $imageUrl,
+        ?string $thumbnailUrl,
+        array $variants,
+        array $metadata,
+        DateTimeImmutable $syncedAt = new DateTimeImmutable(),
+    ): void {
+        $this->name = $name;
+        $this->rarity = $rarity;
+        $this->cardType = $cardType;
+        $this->primaryCollectible = $primaryCollectible;
+        $this->illustrator = $illustrator;
+        $this->imageUrl = $imageUrl;
+        $this->thumbnailUrl = $thumbnailUrl;
+        $this->metadata = $metadata;
+
+        foreach ($variants as $variant) {
+            if ($this->hasVariant($variant)) {
+                continue;
+            }
+
+            $this->addVariant($variant);
+        }
+
+        $this->updatedAt = $syncedAt;
+    }
+
     /** @return Collection<int, CardVariant> */
     public function getVariants(): Collection
     {
@@ -227,5 +267,16 @@ final class CatalogCard
     public function getUpdatedAt(): DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    private function hasVariant(VariantCode $code): bool
+    {
+        foreach ($this->variants as $variant) {
+            if ($variant->getCode() === $code) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

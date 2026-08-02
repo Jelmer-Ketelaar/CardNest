@@ -97,6 +97,62 @@ Read-only and public. Describes official card data only — never a card a speci
 `GET /api/v1/cards/{id}` returns one card with its set, every registered variant, raw metadata and external source
 references. Unknown set/card ids return `404`.
 
+### Current price and daily history
+
+`GET /api/v1/cards/{id}/prices?days=30` is public and returns Cardmarket EUR indications plus CardNest's own daily
+history. `days` accepts `2` through `90` and defaults to `30`. When today's measurement is missing, the endpoint
+refreshes the individual source card before returning; repeated reads on the same Amsterdam calendar day use the
+stored snapshot. Open wishlist cards, non-archived collection cards and non-terminal listing cards are also queued
+for refresh every day at 12:00 Europe/Amsterdam.
+
+```json
+{
+  "cardId": "9ddf1d18-42ef-4a52-93d3-ef82e40fac19",
+  "source": "tcgdex",
+  "market": "cardmarket",
+  "currency": "EUR",
+  "refreshStatus": "current",
+  "checkedAt": "2026-08-02T10:05:00+00:00",
+  "prices": [
+    {
+      "variant": "standard",
+      "lowest": { "amount": 2, "currency": "EUR" },
+      "average": { "amount": 11, "currency": "EUR" },
+      "trend": { "amount": 15, "currency": "EUR" },
+      "averageOneDay": { "amount": 5, "currency": "EUR" },
+      "averageSevenDays": { "amount": 13, "currency": "EUR" },
+      "averageThirtyDays": { "amount": 11, "currency": "EUR" },
+      "sourceUpdatedAt": "2026-08-02T08:03:04+00:00",
+      "observedAt": "2026-08-02T10:05:00+00:00",
+      "observedOn": "2026-08-02",
+      "change": { "amount": 3, "currency": "EUR", "percentage": 25 }
+    }
+  ],
+  "history": [
+    {
+      "variant": "standard",
+      "lowest": { "amount": 2, "currency": "EUR" },
+      "average": { "amount": 11, "currency": "EUR" },
+      "trend": { "amount": 15, "currency": "EUR" },
+      "averageOneDay": { "amount": 5, "currency": "EUR" },
+      "averageSevenDays": { "amount": 13, "currency": "EUR" },
+      "averageThirtyDays": { "amount": 11, "currency": "EUR" },
+      "sourceUpdatedAt": "2026-08-02T08:03:04+00:00",
+      "observedAt": "2026-08-02T10:05:00+00:00",
+      "observedOn": "2026-08-02"
+    }
+  ],
+  "disclaimer": "Externe Cardmarket-prijsindicatie via TCGdex; dit is geen gegarandeerde verkoopopbrengst."
+}
+```
+
+`variant` is `standard` or `foil`. Money remains integer minor units. `change` compares the latest trend price with
+the preceding stored daily snapshot and can contain a negative `amount`; it is `null` until two measurements exist.
+`refreshStatus` is `refreshed`, `current`, `no_data`, `unsupported`, or `refresh_failed`. A provider failure does not
+delete older history and starts a five-minute retry cooldown. A distributed card/day lock serializes concurrent
+page and scheduler refreshes. TCGdex does not supply Cardmarket median prices, condition-specific prices, or listing counts,
+so CardNest does not invent them and never labels this indication as guaranteed market value.
+
 List endpoints share one pagination envelope:
 
 ```json
@@ -732,7 +788,7 @@ exposed. Unknown users return `404 user_not_found`. `page` must be positive and 
 
 | Concept | Values |
 | --- | --- |
-| Card language | `en`, `nl`, `ja`, `ko`, `de`, `fr`, `it`, `es`, `pt`, `zh` |
+| Card language | `en`, `nl`, `ja`, `ko`, `de`, `fr`, `it`, `es`, `es-mx`, `pt`, `pt-br`, `pt-pt`, `pl`, `ru`, `id`, `th`, `zh`, `zh-cn`, `zh-tw` (`zh` remains supported for existing generic-Chinese records) |
 | Card condition | `mint`, `near_mint`, `excellent`, `good`, `light_played`, `played`, `poor` |
 | Card variant | `normal`, `holo`, `reverse_holo`, `cosmos_holo`, `stamped`, `promo`, `first_edition`, `unlimited`, `shadowless`, `alternate_art`, `illustration_rare`, `special_illustration_rare`, `gold`, `rainbow`, `master_ball`, `poke_ball`, `other` |
 | Collection item status | `in_collection`, `for_sale`, `archived` |

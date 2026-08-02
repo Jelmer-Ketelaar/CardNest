@@ -8,15 +8,12 @@ import ErrorMessage from '../components/ErrorMessage.vue'
 import type { PaginatedResponse } from '../types/api'
 import type { CatalogCard } from '../types/catalog'
 import type { WishlistCollectionResponse, WishlistDetail, WishlistItem } from '../types/wishlist'
+import { cardLanguages as languages } from '../constants/cardLanguages'
 import { formatMoney, parseOptionalMinorUnits } from '../utils/money'
 
 const route = useRoute()
 const router = useRouter()
 
-const languages = [
-  ['en', 'Engels'], ['nl', 'Nederlands'], ['ja', 'Japans'], ['ko', 'Koreaans'], ['de', 'Duits'],
-  ['fr', 'Frans'], ['it', 'Italiaans'], ['es', 'Spaans'], ['pt', 'Portugees'], ['zh', 'Chinees'],
-] as const
 const conditions = [
   ['mint', 'Mint'], ['near_mint', 'Near Mint'], ['excellent', 'Excellent'], ['good', 'Good'],
   ['light_played', 'Light Played'], ['played', 'Played'], ['poor', 'Poor'],
@@ -551,7 +548,10 @@ onMounted(() => { void loadWishlists() })
             v-for="item in visibleItems"
             :key="item.id"
             class="wishlist-card"
-            :class="{ 'wishlist-card--completed': item.completed }"
+            :class="{
+              'wishlist-card--completed': item.completed,
+              'wishlist-card--no-image': !item.card.thumbnailUrl,
+            }"
           >
             <img v-if="item.card.thumbnailUrl" :src="item.card.thumbnailUrl" alt="">
             <div class="wishlist-card__body">
@@ -653,6 +653,13 @@ onMounted(() => { void loadWishlists() })
                   {{ item.fulfilledQuantity }}/{{ item.desiredQuantity }}
                 </progress>
                 <div class="wishlist-item-actions">
+                  <RouterLink
+                    class="button button--secondary"
+                    :to="{ name: 'catalog-card', params: { id: item.card.id } }"
+                    :aria-label="`Bekijk ${item.card.name} en prijsindicatie`"
+                  >
+                    Bekijk kaart en prijsindicatie
+                  </RouterLink>
                   <BaseButton
                     variant="secondary"
                     :disabled="saving || editingItemLoading !== null"

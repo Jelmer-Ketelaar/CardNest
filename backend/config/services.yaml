@@ -56,6 +56,12 @@ services:
     App\Catalog\Domain\Repository\CatalogCardRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCatalogCardRepository
 
+    App\Catalog\Domain\Provider\CardCatalogProvider:
+        alias: App\Catalog\Infrastructure\Provider\TcgDexCardCatalogProvider
+
+    App\Catalog\Application\Import\CatalogImportStore:
+        alias: App\Catalog\Infrastructure\Import\DoctrineCatalogImportStore
+
     App\Collection\Domain\Repository\CollectionItemRepository:
         alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionItemRepository
 
@@ -100,6 +106,15 @@ services:
 
     App\Review\Domain\Repository\ReviewRepository:
         alias: App\Review\Infrastructure\Persistence\DoctrineReviewRepository
+
+    App\Pricing\Domain\Repository\PriceSnapshotRepository:
+        alias: App\Pricing\Infrastructure\Persistence\DoctrinePriceSnapshotRepository
+
+    App\Pricing\Domain\Repository\TrackedPriceCardRepository:
+        alias: App\Pricing\Infrastructure\Persistence\DoctrineTrackedPriceCardRepository
+
+    App\Pricing\Domain\Provider\MarketPriceProvider:
+        alias: App\Pricing\Infrastructure\Provider\TcgDexMarketPriceProvider
 
     App\Shared\Domain\Transaction\TransactionManager:
         alias: App\Shared\Infrastructure\Persistence\DoctrineTransactionManager

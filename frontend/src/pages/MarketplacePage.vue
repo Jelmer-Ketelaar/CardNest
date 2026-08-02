@@ -9,12 +9,9 @@ import { useAuthStore } from '../stores/auth'
 import type { PaginatedResponse } from '../types/api'
 import type { Listing, ListingImage } from '../types/marketplace'
 import type { Cart } from '../types/order'
+import { cardLanguages as languages } from '../constants/cardLanguages'
 import { formatMoney, parseOptionalMinorUnits } from '../utils/money'
 
-const languages = [
-  ['en', 'Engels'], ['nl', 'Nederlands'], ['ja', 'Japans'], ['ko', 'Koreaans'], ['de', 'Duits'],
-  ['fr', 'Frans'], ['it', 'Italiaans'], ['es', 'Spaans'], ['pt', 'Portugees'], ['zh', 'Chinees'],
-] as const
 const conditions = [
   ['mint', 'Mint'], ['near_mint', 'Near Mint'], ['excellent', 'Excellent'], ['good', 'Good'],
   ['light_played', 'Light Played'], ['played', 'Played'], ['poor', 'Poor'],

@@ -13,23 +13,11 @@ import type {
   StorageLocation,
   StorageLocationCollectionResponse,
 } from '../types/storage'
+import { cardLanguages as languages } from '../constants/cardLanguages'
 import { formatMoney, parseOptionalMinorUnits } from '../utils/money'
 
 const route = useRoute()
 const router = useRouter()
-
-const languages = [
-  ['en', 'Engels'],
-  ['nl', 'Nederlands'],
-  ['ja', 'Japans'],
-  ['ko', 'Koreaans'],
-  ['de', 'Duits'],
-  ['fr', 'Frans'],
-  ['it', 'Italiaans'],
-  ['es', 'Spaans'],
-  ['pt', 'Portugees'],
-  ['zh', 'Chinees'],
-] as const
 
 const conditions = [
   ['mint', 'Mint'],

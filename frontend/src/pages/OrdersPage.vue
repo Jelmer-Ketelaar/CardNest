@@ -9,12 +9,8 @@ import type { ShippingMethodCode } from '../types/marketplace'
 import type { Order, OrderCollection, OrderItem } from '../types/order'
 import type { Review, ReviewCollection } from '../types/review'
 import type { StorageLocation, StorageLocationCollectionResponse } from '../types/storage'
+import { cardLanguages as languages } from '../constants/cardLanguages'
 import { formatMoney } from '../utils/money'
-
-const languages = [
-  ['en', 'Engels'], ['nl', 'Nederlands'], ['ja', 'Japans'], ['ko', 'Koreaans'], ['de', 'Duits'],
-  ['fr', 'Frans'], ['it', 'Italiaans'], ['es', 'Spaans'], ['pt', 'Portugees'], ['zh', 'Chinees'],
-] as const
 
 const conditions = [
   ['mint', 'Mint'], ['near_mint', 'Near Mint'], ['excellent', 'Excellent'], ['good', 'Good'],

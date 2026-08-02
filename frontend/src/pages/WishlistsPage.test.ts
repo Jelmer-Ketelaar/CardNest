@@ -116,6 +116,9 @@ describe('WishlistsPage', () => {
     // Assert
     expect(mocks.apiRequest).toHaveBeenCalledWith('/me/wishlists/' + initial.id)
     expect(root.textContent).toContain('Mudkip master set')
+    expect(root.textContent).toContain('Bekijk kaart en prijsindicatie')
+    expect(root.querySelector('[aria-label="Bekijk Mudkip en prijsindicatie"]')?.getAttribute('data-card-id'))
+      .toBe('card-id')
 
     // Act
     clickButton(root, 'Voorkeuren bewerken')
@@ -280,7 +283,10 @@ function mountPage(): MountedPage {
   const root = document.createElement('div')
   document.body.append(root)
   const app = createApp(WishlistsPage)
-  app.component('RouterLink', { template: '<a><slot /></a>' })
+  app.component('RouterLink', {
+    props: ['to'],
+    template: '<a :data-card-id="to.params ? to.params.id : null"><slot /></a>',
+  })
   app.mount(root)
   const page = { app, root }
   mountedPages.push(page)

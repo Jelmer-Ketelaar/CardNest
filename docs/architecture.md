@@ -12,16 +12,22 @@ flowchart TD
     SPA[Vue 3 SPA]
     API[Symfony JSON API]
     Worker[Symfony Messenger worker]
+    Scheduler[Symfony pricing scheduler]
     Postgres[(PostgreSQL)]
     Redis[(Redis)]
+    PriceSource[TCGdex / Cardmarket pricing]
     Mail[Async mail / notifications]
 
     Collector --> SPA
     SPA -->|"fetch, Bearer token"| API
     API --> Postgres
-    API -->|cache, dispatch| Redis
+    API -->|cache, locks, dispatch| Redis
+    API -->|cache miss, provider adapter| PriceSource
     Redis -->|consume due messages| Worker
+    Scheduler -->|daily tracked-card fan-out| Redis
+    Scheduler -->|state, distributed lock| Redis
     Worker --> Postgres
+    Worker --> PriceSource
     Worker --> Mail
 ```
 
@@ -75,6 +81,7 @@ flowchart TD
     Payment[Payment: provider-neutral charges]
     Shipping[Shipping: dispatch and receipt confirmation]
     Review[Review: transaction feedback and reputation]
+    Pricing[Pricing: current indications and daily snapshots]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -104,6 +111,8 @@ flowchart TD
     Shipping --> Shared
     Review --> Order
     Review --> Identity
+    Pricing --> Catalog
+    Pricing --> Shared
     Payment --> Identity
     Payment --> Shared
     Catalog --> Shared
@@ -124,9 +133,10 @@ flowchart TD
 | `Payment` | `payments`, `payment_transactions`; the `PaymentProvider` port and fake adapter | `Identity` (buyer), `Shared` (`Money`) |
 | `Shipping` | `shipments`; seller dispatch, buyer receipt confirmation, and sold-item archival | `Order`, `Collection`, `Storage`, `Identity`, `Shared` |
 | `Review` | `reviews`; participant feedback and public aggregate reputation | `Order` (completed transaction), `Identity` (reviewer and reviewed user) |
+| `Pricing` | `price_snapshots`; provider-neutral current indications, daily history and scheduled refresh | `Catalog` (source card), `Shared` (`Money`) |
 | `Shared` | cross-cutting value objects, transaction port, and the API exception handler | — |
 
-Planned modules (`Notification`, `Pricing`, `Moderation`, `Reporting`)
+Planned modules (`Notification`, `Moderation`, `Reporting`)
 will slot in the same way, each adding one more layer of dependency on
 `Catalog`/`Collection`/`Identity` without those lower modules ever depending back up.
 

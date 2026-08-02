@@ -117,4 +117,6 @@ test('a collector can create a wishlist and add a missing card', async ({ page }
   await expect(page.locator('.wishlist-card').getByRole('heading', { name: 'Mudkip · 19/25' })).toBeVisible()
   await expect(page.getByText('1 van 1 kaarten ontbreken nog.')).toBeVisible()
   await expect(page.getByText(/€\s*8,00/)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Bekijk Mudkip en prijsindicatie' }))
+    .toHaveAttribute('href', `/catalog/cards/${cardId}`)
 })

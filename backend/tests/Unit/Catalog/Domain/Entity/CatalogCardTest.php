@@ -67,6 +67,40 @@ final class CatalogCardTest extends TestCase
         self::assertSame($syncedAt, $reference->getLastSyncedAt());
     }
 
+    public function testDetailedProviderSynchronizationEnrichesFieldsAndOnlyAddsVariants(): void
+    {
+        // Arrange
+        $card = $this->createCard();
+        $card->addVariant(VariantCode::Normal);
+        $syncedAt = new DateTimeImmutable('2026-08-02T12:00:00+00:00');
+
+        // Act
+        $card->synchronizeFromProvider(
+            name: 'Mudkip',
+            rarity: 'Rare Holo',
+            cardType: 'Pokemon',
+            primaryCollectible: 'Mudkip',
+            illustrator: 'Yuka Morii',
+            imageUrl: 'https://assets.example.test/mudkip',
+            thumbnailUrl: null,
+            variants: [VariantCode::Normal, VariantCode::Holo],
+            metadata: ['sourceDetailLevel' => 'detail'],
+            syncedAt: $syncedAt,
+        );
+
+        // Assert
+        self::assertSame('Rare Holo', $card->getRarity());
+        self::assertSame('Pokemon', $card->getCardType());
+        self::assertSame('Yuka Morii', $card->getIllustrator());
+        self::assertSame('https://assets.example.test/mudkip', $card->getImageUrl());
+        self::assertSame(['sourceDetailLevel' => 'detail'], $card->getMetadata());
+        self::assertSame(['normal', 'holo'], array_map(
+            static fn (\App\Catalog\Domain\Entity\CardVariant $variant): string => $variant->getCode()->value,
+            $card->getVariants()->toArray(),
+        ));
+        self::assertSame($syncedAt, $card->getUpdatedAt());
+    }
+
     private function createCard(): CatalogCard
     {
         $series = new CardSeries('Promotional collections');

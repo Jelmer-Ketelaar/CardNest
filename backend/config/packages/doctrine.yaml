@@ -80,6 +80,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Review/Domain/Entity'
                 prefix: 'App\Review\Domain\Entity'
                 alias: Review
+            Pricing:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Pricing/Domain/Entity'
+                prefix: 'App\Pricing\Domain\Entity'
+                alias: Pricing
 
 when@test:
     doctrine:
