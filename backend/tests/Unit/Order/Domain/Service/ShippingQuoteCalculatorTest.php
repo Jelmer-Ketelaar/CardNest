@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Marketplace\Domain\Entity\Listing;
@@ -76,7 +77,7 @@ final class ShippingQuoteCalculatorTest extends TestCase
         );
         $card = new CatalogCard($set, 'Mudkip', (string) $letterPrice, 'Promo', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $item = new CollectionItem(new Collection($seller), $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $shipping = [new ShippingOption(ShippingMethodCode::LetterMail, new Money($letterPrice, 'EUR'))];
         if ($parcel) {
             $shipping[] = new ShippingOption(ShippingMethodCode::Parcel, new Money(595, 'EUR'));

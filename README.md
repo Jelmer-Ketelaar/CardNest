@@ -43,12 +43,12 @@ CardNest is implemented incrementally, one module at a time. This is the current
 
 - Browse card series and sets (`GET /api/v1/card-sets`), each with release date, language, printed/total card
   counts, and lifecycle status (announced, active, out of print, unknown)
-- Search the catalog (`GET /api/v1/cards`) filtered by set, name, card number, or rarity, with pagination
+- Search the catalog (`GET /api/v1/cards`) filtered by set, series, name, card number, rarity, or variant, with pagination
 - Look up a single set or card in full detail, including every variant it was printed in (holo, reverse holo,
   illustration rare, ...) drawn from a closed, configurable vocabulary instead of free text
-- Every catalog card keeps, and exposes, a record of the external source(s) it was imported from (source name,
-  external id, last sync date), so a future import adapter can refresh data without silently overwriting manual
-  corrections
+- Import official set and card data from TCGdex through a provider adapter. The import is resumable and idempotent:
+  it retains the source name, external id and raw provider payload, refreshes that raw data on a later run, and keeps
+  manual source corrections separate
 - Catalog data is intentionally public and read-only. It describes what a card officially *is* — never who owns one
 - Seed data ships two real-shaped sets and twenty cards for local exploration, including the "Mudkip 19/25" example
   used throughout the product specification
@@ -158,6 +158,20 @@ CardNest is implemented incrementally, one module at a time. This is the current
   comment length again in PostgreSQL
 - Expose authored reviews privately and a paginated public reputation summary without disclosing transaction ids
 
+### Daily market prices (Pricing module)
+
+- Show Cardmarket EUR price indications on every catalog-card detail page: lowest listed price, average source
+  price and trend price, split into standard/non-foil and holo/foil when the source provides both
+- Fetch the current TCGdex card response at most once per card per Amsterdam calendar day and store exact integer
+  eurocent snapshots; a shared Redis lock prevents concurrent page and scheduler requests from duplicating that call
+- Keep daily history with both CardNest's observation time and the provider's own update time, including the trend
+  difference from the previous stored day
+- Refresh cards in open wishlists, active collections and non-terminal listings automatically every day at 12:00
+  Europe/Amsterdam through Symfony Scheduler and the Redis-backed Messenger queue
+- Keep the market-price provider behind an interface and label values as an external indication, never as a
+  guaranteed market value or sale result. Missing source pricing remains an explicit no-data state and temporary
+  source failures use a five-minute retry cooldown
+
 ### Frontend
 
 - Vue 3 + TypeScript single-page app: a public marketplace and reputation profiles plus authenticated registration,
@@ -168,7 +182,8 @@ CardNest is implemented incrementally, one module at a time. This is the current
 
 ### Platform
 
-- Dockerized backend (PHP / Symfony), frontend, PostgreSQL, Redis, and a Messenger worker
+- Dockerized backend (PHP / Symfony), frontend, PostgreSQL, Redis, a Messenger worker, and a dedicated pricing
+  scheduler worker
 - A `/api/v1/health` endpoint for uptime checks
 - Structured JSON error responses (`{"error": {"code", "message", "details"}}`) across the whole API
 - Continuous integration that runs the backend and frontend test suites on every push
@@ -192,6 +207,9 @@ its own module, in roughly this order:
 - **Disputes for shipped or completed orders, a real payment provider, partial item refunds, and chargebacks** —
   financial and operational paths beyond the synchronous fake-provider cancellation flow
   (alerts, price history, fraud signals, financial reporting, ...)
+- **Cancellations and refunds** — add reversible post-payment failure paths separately from successful fulfillment
+- **Notification, Moderation, Reporting** — supporting modules around the marketplace
+  (alerts, fraud signals, financial reporting, ...)
 
 Trading, real payments, auctions, price negotiation, automated card scanning, grading submissions, sealed products,
 and international shipping are explicitly out of scope for the MVP described in the product specification.
@@ -239,6 +257,7 @@ flowchart TD
     Payment[Payment: provider-neutral payments and refunds]
     Shipping[Shipping: dispatch and receipt confirmation]
     Review[Review: transaction feedback and reputation]
+    Pricing[Pricing: daily external price snapshots]
     Shared[Shared: Money, JSON error handling]
 
     Collection --> Catalog
@@ -268,6 +287,8 @@ flowchart TD
     Shipping --> Shared
     Review --> Order
     Review --> Identity
+    Pricing --> Catalog
+    Pricing --> Shared
     Payment --> Identity
     Payment --> Order
     Payment --> Shared
@@ -277,7 +298,7 @@ flowchart TD
 ```
 
 Implemented modules today: `Identity`, `Catalog`, `Collection`, `Storage`, `Binder`, `Wishlist`, `Marketplace`,
-`Order`, `Payment`, `Shipping`, `Review`, `Shared`. Planned modules follow the same shape (see "What's not built
+`Order`, `Payment`, `Shipping`, `Review`, `Pricing`, `Shared`. Planned modules follow the same shape (see "What's not built
 yet" above).
 For a deeper walkthrough — including a
 request-sequence diagram and the conventions every module follows — see [docs/architecture.md](docs/architecture.md).
@@ -317,12 +338,52 @@ docker compose up
 ```
 
 The frontend is then available at <http://localhost:5174> and the API at <http://localhost:8080/api/v1>. The backend
-container applies outstanding migrations on startup; the `worker` container consumes e-mail and delayed listing
-expiration messages. To load the optional twenty-card development catalog into an empty database:
+container applies outstanding migrations on startup; the `worker` container consumes asynchronous jobs and the
+`pricing-scheduler` container emits the daily refresh at noon (Europe/Amsterdam). To load the optional twenty-card
+development catalog into an empty database:
 
 ```bash
 docker compose exec backend php bin/console doctrine:fixtures:load --no-interaction
 ```
+
+Refresh one card immediately, or omit the UUID to refresh all currently followed cards:
+
+```bash
+docker compose exec backend php bin/console pricing:refresh <catalog-card-uuid> --force
+docker compose exec backend php bin/console pricing:refresh
+docker compose exec backend php bin/console debug:scheduler pricing
+```
+
+### Import the full catalog
+
+The catalog importer uses the [TCGdex v2 API](https://tcgdex.dev/rest) behind a `CardCatalogProvider` adapter. Without
+options it imports every language the provider currently declares, every available set, and every available card:
+
+```bash
+docker compose exec backend php bin/console --no-debug catalog:import:tcgdex
+```
+
+TCGdex image bases are resolved to external `high.webp` detail images and `low.webp` thumbnails as documented by
+the provider; CardNest does not download or store those protected card images locally.
+
+This is intentionally a long-running, resumable operation. For a small validation run, target a language and set;
+running the same command again does not create duplicates:
+
+```bash
+docker compose exec backend php bin/console catalog:import:tcgdex --language=en --set=base1
+```
+
+The standard run imports the complete set/card index needed for browsing and wishlists with one source request per
+set. To enrich those same records with the full per-card source payload (rarity, card type, detailed variants,
+illustrator and similar data), run a later, slower pass:
+
+```bash
+docker compose exec backend php bin/console --no-debug catalog:import:tcgdex --with-card-details
+```
+
+TCGdex publishes different levels of coverage per language. CardNest imports every record the source provides, but
+does not invent records missing upstream. The importer only saves source-provided external image URLs; it does not
+download or locally cache card artwork. Review the image/data source terms before enabling this import in production.
 
 `CART_RESERVATION_MINUTES` defaults to `15` and accepts `1`–`60`. It defines the reservation expiry recorded during
 checkout; the current fake provider succeeds synchronously, so those reservations complete immediately.
@@ -333,6 +394,7 @@ Run the main quality checks with:
 docker compose exec backend vendor/bin/phpunit
 docker compose exec backend vendor/bin/phpstan analyse --no-progress --memory-limit=512M
 docker compose exec backend vendor/bin/php-cs-fixer fix --dry-run --diff
+docker compose exec frontend npm run lint
 docker compose exec frontend npm test
 docker compose exec frontend npm run build
 docker compose exec frontend npm run test:e2e
@@ -342,5 +404,9 @@ docker compose exec frontend npm run test:e2e
 
 - [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes
 - [docs/architecture.md](docs/architecture.md) — system diagram, module layering, and an end-to-end request walkthrough
+- [docs/security-review.md](docs/security-review.md) — repeatable MVP security release gate and evidence template
+- [docs/release-checklist.md](docs/release-checklist.md) — MVP quality, security, accessibility and deployment release gate
+- [docs/production-environment.md](docs/production-environment.md) — production configuration and operational expectations
+- [docs/release-notes/mvp.md](docs/release-notes/mvp.md) — delivered MVP scope and explicit limitations
 - [CONTRIBUTING.md](CONTRIBUTING.md) — ground rules, coding standards, and the workflow for adding the next module
 - [frontend/README.md](frontend/README.md) — frontend structure, API-client conventions, and how to add a page

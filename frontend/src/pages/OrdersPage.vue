@@ -1,19 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
+import { useAuthStore } from '../stores/auth'
 import type { ShippingMethodCode } from '../types/marketplace'
 import type { Order, OrderCollection, OrderItem } from '../types/order'
 import type { Review, ReviewCollection } from '../types/review'
 import type { StorageLocation, StorageLocationCollectionResponse } from '../types/storage'
+import { cardLanguages as languages } from '../constants/cardLanguages'
 import { formatMoney } from '../utils/money'
-
-const languages = [
-  ['en', 'Engels'], ['nl', 'Nederlands'], ['ja', 'Japans'], ['ko', 'Koreaans'], ['de', 'Duits'],
-  ['fr', 'Frans'], ['it', 'Italiaans'], ['es', 'Spaans'], ['pt', 'Portugees'], ['zh', 'Chinees'],
-] as const
 
 const conditions = [
   ['mint', 'Mint'], ['near_mint', 'Near Mint'], ['excellent', 'Excellent'], ['good', 'Good'],
@@ -21,6 +18,7 @@ const conditions = [
 ] as const
 
 const route = useRoute()
+const auth = useAuthStore()
 const orders = ref<Order[]>([])
 const loading = ref(false)
 const updatingOrderId = ref<string | null>(null)
@@ -45,6 +43,19 @@ const reviewForm = reactive({
   communicationScore: 5,
   shippingSpeedScore: 5,
   comment: '',
+})
+const orderId = computed(() => typeof route.params.id === 'string' ? route.params.id : null)
+const isOrderDetail = computed(() => orderId.value !== null)
+const isSellerOverview = computed(() => String(route.name) === 'seller-orders')
+const displayedOrders = computed(() => {
+  if (isOrderDetail.value) return orders.value
+
+  const userId = auth.user?.id
+  if (!userId) return orders.value
+
+  return orders.value.filter((order) => (
+    isSellerOverview.value ? order.seller.id === userId : order.buyer.id === userId
+  ))
 })
 const completedCheckoutCount = computed(() => {
   const value = typeof route.query.checkedOut === 'string' ? Number.parseInt(route.query.checkedOut, 10) : 0
@@ -82,11 +93,25 @@ async function loadOrders(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
+    const requestedOrderId = orderId.value
+    if (requestedOrderId === null) {
+      const [orderResponse, reviewResponse] = await Promise.all([
+        apiRequest<OrderCollection>('/me/orders'),
+        apiRequest<ReviewCollection>('/me/reviews'),
+      ])
+      orders.value = orderResponse.items
+      reviewedOrderIds.value = new Set(
+        reviewResponse.items.flatMap((review) => review.orderId ? [review.orderId] : []),
+      )
+
+      return
+    }
+
     const [orderResponse, reviewResponse] = await Promise.all([
-      apiRequest<OrderCollection>('/me/orders'),
+      apiRequest<Order>(`/me/orders/${requestedOrderId}`),
       apiRequest<ReviewCollection>('/me/reviews'),
     ])
-    orders.value = orderResponse.items
+    orders.value = [orderResponse]
     reviewedOrderIds.value = new Set(
       reviewResponse.items.flatMap((review) => review.orderId ? [review.orderId] : []),
     )
@@ -275,6 +300,7 @@ async function importToCollection(): Promise<void> {
   }
 }
 
+watch(orderId, () => { void loadOrders() })
 onMounted(() => { void loadOrders() })
 </script>
 
@@ -282,35 +308,46 @@ onMounted(() => { void loadOrders() })
   <main class="page-container orders-page">
     <header class="page-heading">
       <div>
-        <p class="eyebrow">Aankopen en verkopen</p>
-        <h1>Mijn orders</h1>
-        <p>Iedere verkoper krijgt een afzonderlijke order met vastgelegde kaart- en verzendkosten.</p>
+        <p class="eyebrow">{{ isOrderDetail ? 'Orderdetails' : (isSellerOverview ? 'Verkopen' : 'Aankopen') }}</p>
+        <h1>{{ isOrderDetail ? 'Orderdetails' : (isSellerOverview ? 'Mijn verkopen' : 'Mijn aankopen') }}</h1>
+        <p v-if="isOrderDetail">Kaart-, betalings- en verzendgegevens zijn vastgelegd op het moment van aankoop.</p>
+        <p v-else>Iedere verkoper krijgt een afzonderlijke order met vastgelegde kaart- en verzendkosten.</p>
       </div>
-      <RouterLink class="button button--secondary" :to="{ name: 'cart' }">Naar winkelmand</RouterLink>
+      <div class="page-heading__actions">
+        <RouterLink v-if="isOrderDetail" class="button button--secondary" :to="{ name: 'orders' }">Mijn aankopen</RouterLink>
+        <RouterLink v-else-if="isSellerOverview" class="button button--secondary" :to="{ name: 'orders' }">Mijn aankopen</RouterLink>
+        <RouterLink v-else class="button button--secondary" :to="{ name: 'seller-orders' }">Mijn verkopen</RouterLink>
+        <RouterLink class="button button--secondary" :to="{ name: 'cart' }">Naar winkelmand</RouterLink>
+      </div>
     </header>
 
-    <p v-if="completedCheckoutCount" class="success-message" role="status">
+    <p v-if="!isOrderDetail && !isSellerOverview && completedCheckoutCount" class="success-message" role="status">
       Testbetaling geslaagd. {{ completedCheckoutCount }} {{ completedCheckoutCount === 1 ? 'order is' : 'orders zijn' }} aangemaakt.
     </p>
     <p v-if="success" class="success-message" role="status">{{ success }}</p>
     <ErrorMessage v-if="error" :message="error" />
     <p v-if="loading" class="empty-state" role="status">Orders laden…</p>
-    <section v-else-if="orders.length === 0" class="empty-state">
+    <section v-else-if="displayedOrders.length === 0" class="empty-state">
       <h2>Nog geen orders</h2>
-      <p>Na een geslaagde testcheckout verschijnen je orders hier.</p>
-      <RouterLink class="button button--primary" :to="{ name: 'marketplace' }">Bekijk marktplaats</RouterLink>
+      <p>{{ isSellerOverview ? 'Zodra iemand een van je listings koopt, verschijnt de order hier.' : 'Na een geslaagde testcheckout verschijnen je orders hier.' }}</p>
+      <RouterLink v-if="!isSellerOverview" class="button button--primary" :to="{ name: 'marketplace' }">Bekijk marktplaats</RouterLink>
     </section>
 
     <section v-else class="orders-list" aria-label="Orders">
-      <article v-for="order in orders" :key="order.id" class="panel panel--wide order-card">
+      <article v-for="order in displayedOrders" :key="order.id" class="panel panel--wide order-card">
         <header class="order-card__heading">
           <div>
             <span class="badge">{{ statusLabel(order.status) }}</span>
             <h2>Order {{ order.id.slice(0, 8) }}</h2>
             <p>{{ formattedDate(order.createdAt) }}</p>
+            <p v-if="!isOrderDetail">{{ isSellerOverview ? `Koper ${order.buyer.id.slice(0, 8)}` : `Verkoper ${order.seller.id.slice(0, 8)}` }}</p>
           </div>
           <strong>{{ formatMoney(order.costs.total.amount, order.costs.total.currency) }}</strong>
         </header>
+
+        <RouterLink v-if="!isOrderDetail" class="button button--secondary" :to="{ name: 'order-detail', params: { id: order.id } }">
+          Bekijk orderdetails
+        </RouterLink>
 
         <div
           v-if="order.availableActions.cancel || order.availableActions.markShipped || order.availableActions.confirmReceived || order.status === 'completed'"
@@ -366,7 +403,7 @@ onMounted(() => { void loadOrders() })
           </li>
         </ul>
 
-        <div class="order-card__details">
+        <div v-if="isOrderDetail" class="order-card__details">
           <dl>
             <div><dt>Kaarten</dt><dd>{{ formatMoney(order.costs.items.amount, order.costs.items.currency) }}</dd></div>
             <div><dt>{{ shippingLabel(order.shippingMethod) }}</dt><dd>{{ formatMoney(order.costs.shipping.amount, order.costs.shipping.currency) }}</dd></div>
@@ -386,7 +423,6 @@ onMounted(() => { void loadOrders() })
           <div>
             <h3>Betaling</h3>
             <p>{{ order.payment.provider === 'fake' ? 'Nep-betaalprovider' : order.payment.provider }} · {{ paymentStatusLabel(order.payment.status) }}</p>
-            <small v-if="order.payment.providerReference">Referentie {{ order.payment.providerReference }}</small>
           </div>
           <div v-if="order.cancellation">
             <h3>Annulering</h3>
@@ -400,7 +436,7 @@ onMounted(() => { void loadOrders() })
           </div>
         </div>
 
-        <ol class="order-timeline" aria-label="Orderstatusgeschiedenis">
+        <ol v-if="isOrderDetail" class="order-timeline" aria-label="Orderstatusgeschiedenis">
           <li v-for="history in order.statusHistory" :key="history.id">
             <strong>{{ statusLabel(history.to) }}</strong>
             <time :datetime="history.occurredAt">{{ formattedDate(history.occurredAt) }}</time>

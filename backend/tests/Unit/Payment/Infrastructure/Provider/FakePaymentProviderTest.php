@@ -4,42 +4,48 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Payment\Infrastructure\Provider;
 
-use App\Payment\Domain\Provider\RefundInstruction;
+use App\Payment\Domain\Provider\PaymentInstruction;
+use App\Payment\Infrastructure\Provider\FailingFakePaymentProvider;
 use App\Payment\Infrastructure\Provider\FakePaymentProvider;
 use App\Shared\Domain\ValueObject\Money;
 use PHPUnit\Framework\TestCase;
 
 final class FakePaymentProviderTest extends TestCase
 {
-    public function testProducesAStableSuccessfulRefundReferenceForTheSameIdempotencyKey(): void
+    public function testSuccessfulProviderReturnsDeterministicReferenceForIdempotencyKey(): void
     {
         // Arrange
         $provider = new FakePaymentProvider();
-        $instruction = new RefundInstruction('fake_payment', new Money(2_400, 'EUR'), 'refund-order-123', 'Cancelled');
+        $instruction = new PaymentInstruction('payment-id', 'buyer-id', new Money(2400, 'EUR'), 'checkout-key');
 
         // Act
-        $first = $provider->refund($instruction);
-        $second = $provider->refund($instruction);
+        $firstResult = $provider->charge($instruction);
+        $secondResult = $provider->charge($instruction);
 
         // Assert
-        self::assertTrue($first->succeeded);
-        self::assertSame('fake_refund_refund-order-123', $first->providerReference);
-        self::assertSame($first->providerReference, $second->providerReference);
+        self::assertTrue($firstResult->succeeded);
+        self::assertSame(2400, $firstResult->amount->amount);
+        self::assertSame('EUR', $firstResult->amount->currency);
+        self::assertNotNull($firstResult->providerReference);
+        self::assertStringStartsWith('fake_', $firstResult->providerReference);
+        self::assertSame($firstResult->providerReference, $secondResult->providerReference);
+        self::assertNull($firstResult->failureReason);
     }
 
-    public function testCanSimulateARefundFailure(): void
+    public function testFailingProviderReturnsTheRequestedAmountWithoutReference(): void
     {
         // Arrange
-        $provider = new FakePaymentProvider(refundsShouldFail: true);
+        $provider = new FailingFakePaymentProvider();
+        $instruction = new PaymentInstruction('payment-id', 'buyer-id', new Money(2400, 'EUR'), 'checkout-key');
 
         // Act
-        $result = $provider->refund(
-            new RefundInstruction('fake_payment', new Money(2_400, 'EUR'), 'refund-order-123', 'Cancelled'),
-        );
+        $result = $provider->charge($instruction);
 
         // Assert
         self::assertFalse($result->succeeded);
+        self::assertSame(2400, $result->amount->amount);
+        self::assertSame('EUR', $result->amount->currency);
         self::assertNull($result->providerReference);
-        self::assertNotNull($result->failureReason);
+        self::assertSame('De testbetaling is afgewezen.', $result->failureReason);
     }
 }

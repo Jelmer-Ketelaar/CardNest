@@ -8,6 +8,7 @@ use App\Catalog\Application\Dto\CatalogCardCollectionResponse;
 use App\Catalog\Application\Dto\CatalogCardResponse;
 use App\Catalog\Application\Dto\SearchCatalogCardsRequest;
 use App\Catalog\Domain\Entity\CatalogCard;
+use App\Catalog\Domain\Entity\VariantCode;
 use App\Catalog\Domain\Repository\CatalogCardRepository;
 use App\Catalog\Domain\Repository\CatalogCardSearchCriteria;
 
@@ -21,9 +22,11 @@ final readonly class CatalogCardFinder
     {
         $criteria = new CatalogCardSearchCriteria(
             setId: $request->setId,
+            seriesId: $request->seriesId,
             name: $request->name,
             number: $request->number,
             rarity: $request->rarity,
+            variant: null !== $request->variant ? VariantCode::from($request->variant) : null,
             page: $request->page,
             perPage: $request->perPage,
         );

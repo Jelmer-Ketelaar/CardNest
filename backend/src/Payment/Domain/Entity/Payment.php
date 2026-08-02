@@ -118,6 +118,9 @@ final class Payment
         if ($this->status !== PaymentStatus::Pending) {
             throw new InvalidPayment('Alleen een openstaande betaling kan worden verwerkt.');
         }
+        if ($result->amount->amount !== $this->amount || $result->amount->currency !== $this->currency) {
+            throw new InvalidPayment('Het betaalproviderresultaat bevat een afwijkend bedrag of valuta.');
+        }
 
         $now = new DateTimeImmutable();
         if ($result->succeeded) {

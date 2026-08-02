@@ -12,6 +12,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Collection\Domain\Entity\CollectionItemStatus;
 use App\Collection\Domain\Exception\ArchivedCollectionItemCannotBeChanged;
@@ -31,7 +32,7 @@ final class CollectionItemTest extends TestCase
 
         // Act
         $item = new CollectionItem(
-            owner: $owner,
+            collection: new Collection($owner),
             catalogCard: $card,
             variant: $variant,
             language: CardLanguage::English,
@@ -49,6 +50,8 @@ final class CollectionItemTest extends TestCase
         self::assertSame('Card shop', $item->getSellerName());
         self::assertSame('Clean copy', $item->getNotes());
         self::assertSame(CollectionItemStatus::InCollection, $item->getStatus());
+        self::assertSame($owner, $item->getCollection()->getOwner());
+        self::assertSame($owner, $item->getOwner());
     }
 
     public function testRejectsVariantFromAnotherCatalogCard(): void
@@ -60,7 +63,7 @@ final class CollectionItemTest extends TestCase
 
         // Act
         new CollectionItem(
-            owner: new User('owner@example.com', 'hash'),
+            collection: new Collection(new User('owner@example.com', 'hash')),
             catalogCard: $card,
             variant: $otherVariant,
             language: CardLanguage::English,
@@ -76,7 +79,7 @@ final class CollectionItemTest extends TestCase
         // Arrange
         [$card, $variant] = $this->createCard('Mudkip', '19/25');
         $item = new CollectionItem(
-            owner: new User('owner@example.com', 'hash'),
+            collection: new Collection(new User('owner@example.com', 'hash')),
             catalogCard: $card,
             variant: $variant,
             language: CardLanguage::English,
@@ -97,7 +100,7 @@ final class CollectionItemTest extends TestCase
         // Arrange
         [$card, $variant] = $this->createCard('Mudkip', '19/25');
         $item = new CollectionItem(
-            owner: new User('owner@example.com', 'hash'),
+            collection: new Collection(new User('owner@example.com', 'hash')),
             catalogCard: $card,
             variant: $variant,
             language: CardLanguage::English,
@@ -117,7 +120,7 @@ final class CollectionItemTest extends TestCase
         // Arrange
         [$card, $variant] = $this->createCard('Mudkip', '19/25');
         $item = new CollectionItem(
-            owner: new User('owner@example.com', 'hash'),
+            collection: new Collection(new User('owner@example.com', 'hash')),
             catalogCard: $card,
             variant: $variant,
             language: CardLanguage::English,

@@ -12,7 +12,9 @@ framework:
         routing:
             # Route your messages to the transports
             'App\Identity\Application\Message\SendVerificationEmail': async
+            'App\Identity\Application\Message\SendPasswordResetEmail': async
             'App\Marketplace\Application\Message\ExpireListing': async
+            'App\Pricing\Application\Message\RefreshCardPrice': async
 
 when@test:
     framework:

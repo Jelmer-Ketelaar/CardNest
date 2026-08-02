@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
@@ -20,6 +21,8 @@ use App\Marketplace\Domain\Entity\ListingStatus;
 use App\Marketplace\Domain\Entity\ShippingMethodCode;
 use App\Marketplace\Domain\ValueObject\ListingPhotoReference;
 use App\Marketplace\Domain\ValueObject\ShippingOption;
+use App\Payment\Domain\Provider\PaymentProvider;
+use App\Payment\Infrastructure\Provider\FailingFakePaymentProvider;
 use App\Shared\Domain\ValueObject\Money;
 use App\Storage\Domain\Entity\CollectionItemLocationHistory;
 use App\Storage\Domain\Entity\StorageLocation;
@@ -43,6 +46,9 @@ final class CheckoutApiTest extends WebTestCase
     private Listing $sellerAFirst;
     private Listing $sellerASecond;
     private Listing $sellerBListing;
+
+    /** @var array<string, Collection> */
+    private array $collectionsByOwner = [];
 
     protected function setUp(): void
     {
@@ -246,6 +252,39 @@ final class CheckoutApiTest extends WebTestCase
         self::assertSame(0, $this->responseData()['total'] ?? null);
     }
 
+    public function testCheckoutRollsBackWhenThePaymentProviderRejectsTheCharge(): void
+    {
+        // Arrange
+        $this->client->disableReboot();
+        self::getContainer()->set(PaymentProvider::class, new FailingFakePaymentProvider());
+        $this->addToCart($this->buyerToken, $this->sellerAFirst);
+        self::assertResponseStatusCodeSame(201);
+
+        // Act
+        $this->checkout($this->buyerToken, [
+            $this->sellerA->getId()->toRfc4122() => 'letter_mail',
+        ]);
+
+        // Assert
+        self::assertResponseStatusCodeSame(402);
+        self::assertSame('payment_failed', $this->responseData()['error']['code'] ?? null);
+        self::assertSame('De testbetaling is afgewezen.', $this->responseData()['error']['message'] ?? null);
+
+        $this->authorizedRequest('GET', '/api/v1/me/cart', $this->buyerToken);
+        self::assertResponseIsSuccessful();
+        self::assertSame(1, $this->responseData()['itemCount'] ?? null);
+
+        $this->publicRequest('GET', '/api/v1/listings/'.$this->sellerAFirst->getId()->toRfc4122());
+        self::assertResponseIsSuccessful();
+        self::assertSame('active', $this->responseData()['status'] ?? null);
+
+        $connection = $this->entityManager->getConnection();
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM orders'));
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM payments'));
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM payment_transactions'));
+        self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM listing_reservations'));
+    }
+
     public function testSellerShipsAndBuyerCompletesOrderWithCollectionArchival(): void
     {
         // Arrange
@@ -421,7 +460,7 @@ final class CheckoutApiTest extends WebTestCase
         $collectionItemId = $import['collectionItemId'];
         $connection = self::getContainer()->get(EntityManagerInterface::class)->getConnection();
         $row = $connection->fetchAssociative(
-            'SELECT owner_id::text, catalog_card_id::text, variant_id::text, language, condition, purchase_price, purchase_currency, purchased_at, notes FROM collection_items WHERE id = :id',
+            'SELECT collection.owner_id::text AS owner_id, item.catalog_card_id::text, item.variant_id::text, item.language, item.condition, item.purchase_price, item.purchase_currency, item.purchased_at, item.notes FROM collection_items item INNER JOIN collections collection ON collection.id = item.collection_id WHERE item.id = :id',
             ['id' => $collectionItemId],
         );
         self::assertIsArray($row);
@@ -435,7 +474,7 @@ final class CheckoutApiTest extends WebTestCase
         self::assertNotNull($row['purchased_at']);
         self::assertSame('Conditie na ontvangst gecontroleerd.', $row['notes']);
         $sourceRow = $connection->fetchAssociative(
-            'SELECT owner_id::text, status FROM collection_items WHERE id = :id',
+            'SELECT collection.owner_id::text AS owner_id, item.status FROM collection_items item INNER JOIN collections collection ON collection.id = item.collection_id WHERE item.id = :id',
             ['id' => $this->sellerAFirst->getCollectionItem()->getId()->toRfc4122()],
         );
         self::assertIsArray($sourceRow);
@@ -560,7 +599,7 @@ final class CheckoutApiTest extends WebTestCase
     ): Listing {
         $card = new CatalogCard($set, $name, $number, 'Rare', 'Collectible');
         $variant = $card->addVariant(VariantCode::Holo);
-        $item = new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::NearMint);
+        $item = new CollectionItem($this->collectionFor($seller), $card, $variant, CardLanguage::English, CardCondition::NearMint);
         $shipping = [new ShippingOption(ShippingMethodCode::LetterMail, new Money($letterPrice, 'EUR'))];
         if ($parcel) {
             $shipping[] = new ShippingOption(ShippingMethodCode::Parcel, new Money(595, 'EUR'));
@@ -585,6 +624,20 @@ final class CheckoutApiTest extends WebTestCase
         $this->entityManager->persist($listing);
 
         return $listing;
+    }
+
+    private function collectionFor(User $owner): Collection
+    {
+        $ownerId = $owner->getId()->toRfc4122();
+        if (isset($this->collectionsByOwner[$ownerId])) {
+            return $this->collectionsByOwner[$ownerId];
+        }
+
+        $collection = new Collection($owner);
+        $this->entityManager->persist($collection);
+        $this->collectionsByOwner[$ownerId] = $collection;
+
+        return $collection;
     }
 
     private function addToCart(string $token, Listing $listing): void

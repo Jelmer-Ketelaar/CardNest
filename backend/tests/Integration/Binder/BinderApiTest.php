@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Binder;
 
+use App\Binder\Domain\Entity\BinderSlot;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
@@ -11,11 +12,14 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\AuthToken;
 use App\Identity\Domain\Entity\User;
+use App\Storage\Domain\Entity\CollectionItemLocationHistory;
 use App\Storage\Domain\Entity\StorageLocation;
 use App\Storage\Domain\Entity\StorageLocationType;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -270,6 +274,50 @@ final class BinderApiTest extends WebTestCase
         self::assertNotNull($history['history'][0]['removedAt'] ?? null);
     }
 
+    public function testDatabaseConstraintRejectsMultipleCurrentItemsInOneBinderSlot(): void
+    {
+        // Arrange
+        $binder = $this->createBinder();
+        $slotId = $binder['pages'][0]['slots'][0]['id'] ?? null;
+        self::assertIsString($slotId);
+        $slot = $this->entityManager->find(BinderSlot::class, $slotId);
+        self::assertInstanceOf(BinderSlot::class, $slot);
+        $this->entityManager->persist(CollectionItemLocationHistory::inBinderSlot($this->mudkipItem, $slot));
+        $this->entityManager->flush();
+
+        // Act
+        $this->entityManager->persist(CollectionItemLocationHistory::inBinderSlot($this->secondMudkipItem, $slot));
+        $this->expectException(UniqueConstraintViolationException::class);
+        $this->entityManager->flush();
+
+        // Assert
+        // The partial unique index is the observable concurrency safeguard.
+    }
+
+    public function testDatabaseConstraintRejectsOneCurrentItemInMultipleBinderSlots(): void
+    {
+        // Arrange
+        $binder = $this->createBinder();
+        $firstSlotId = $binder['pages'][0]['slots'][0]['id'] ?? null;
+        $secondSlotId = $binder['pages'][0]['slots'][1]['id'] ?? null;
+        self::assertIsString($firstSlotId);
+        self::assertIsString($secondSlotId);
+        $firstSlot = $this->entityManager->find(BinderSlot::class, $firstSlotId);
+        $secondSlot = $this->entityManager->find(BinderSlot::class, $secondSlotId);
+        self::assertInstanceOf(BinderSlot::class, $firstSlot);
+        self::assertInstanceOf(BinderSlot::class, $secondSlot);
+        $this->entityManager->persist(CollectionItemLocationHistory::inBinderSlot($this->mudkipItem, $firstSlot));
+        $this->entityManager->flush();
+
+        // Act
+        $this->entityManager->persist(CollectionItemLocationHistory::inBinderSlot($this->mudkipItem, $secondSlot));
+        $this->expectException(UniqueConstraintViolationException::class);
+        $this->entityManager->flush();
+
+        // Assert
+        // The item can have only one current physical placement.
+    }
+
     /** @return array<string, mixed> */
     private function createBinder(): array
     {
@@ -338,22 +386,23 @@ final class BinderApiTest extends WebTestCase
         $mudkipVariant = $mudkip->addVariant(VariantCode::Holo);
         $pikachu = new CatalogCard($set, 'Pikachu', '25/25', 'Promo', 'Collectible');
         $pikachuVariant = $pikachu->addVariant(VariantCode::Normal);
+        $collection = new Collection($owner);
         $firstMudkip = new CollectionItem(
-            $owner,
+            $collection,
             $mudkip,
             $mudkipVariant,
             CardLanguage::English,
             CardCondition::NearMint,
         );
         $secondMudkip = new CollectionItem(
-            $owner,
+            $collection,
             $mudkip,
             $mudkipVariant,
             CardLanguage::English,
             CardCondition::Good,
         );
         $pikachuItem = new CollectionItem(
-            $owner,
+            $collection,
             $pikachu,
             $pikachuVariant,
             CardLanguage::English,
@@ -363,6 +412,7 @@ final class BinderApiTest extends WebTestCase
         $this->entityManager->persist($set);
         $this->entityManager->persist($mudkip);
         $this->entityManager->persist($pikachu);
+        $this->entityManager->persist($collection);
         $this->entityManager->persist($firstMudkip);
         $this->entityManager->persist($secondMudkip);
         $this->entityManager->persist($pikachuItem);

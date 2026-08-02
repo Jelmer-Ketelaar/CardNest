@@ -39,4 +39,18 @@ final class UserTest extends TestCase
         self::assertSame($firstVerification, $user->getEmailVerifiedAt());
         self::assertSame($firstVerification, $user->getUpdatedAt());
     }
+
+    public function testChangingThePasswordHashUpdatesTheUserTimestamp(): void
+    {
+        // Arrange
+        $user = new User('collector@example.com', 'old-hash');
+        $changedAt = new DateTimeImmutable('2026-08-01 10:00:00');
+
+        // Act
+        $user->changePasswordHash('new-hash', $changedAt);
+
+        // Assert
+        self::assertSame('new-hash', $user->getPassword());
+        self::assertSame($changedAt, $user->getUpdatedAt());
+    }
 }

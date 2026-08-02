@@ -11,6 +11,8 @@ services:
       APP_SECRET: ${APP_SECRET:-dev-secret-change-me}
       DATABASE_URL: ${DATABASE_URL:-postgresql://cardnest:cardnest@postgres:5432/cardnest?serverVersion=16&charset=utf8}
       MESSENGER_TRANSPORT_DSN: ${REDIS_URL:-redis://redis:6379}/messages
+      LOCK_DSN: ${LOCK_DSN:-redis://redis:6379/1}
+      CACHE_DSN: ${CACHE_DSN:-redis://redis:6379/2}
       CART_RESERVATION_MINUTES: ${CART_RESERVATION_MINUTES:-15}
     volumes:
       - ./backend:/app
@@ -58,6 +60,30 @@ services:
       APP_SECRET: ${APP_SECRET:-dev-secret-change-me}
       DATABASE_URL: ${DATABASE_URL:-postgresql://cardnest:cardnest@postgres:5432/cardnest?serverVersion=16&charset=utf8}
       MESSENGER_TRANSPORT_DSN: ${REDIS_URL:-redis://redis:6379}/messages
+      LOCK_DSN: ${LOCK_DSN:-redis://redis:6379/1}
+      CACHE_DSN: ${CACHE_DSN:-redis://redis:6379/2}
+      CART_RESERVATION_MINUTES: ${CART_RESERVATION_MINUTES:-15}
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  pricing-scheduler:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    working_dir: /app
+    command: php bin/console messenger:consume scheduler_pricing --time-limit=3600 --memory-limit=128M --no-interaction
+    environment:
+      APP_SECRET: ${APP_SECRET:-dev-secret-change-me}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cardnest:cardnest@postgres:5432/cardnest?serverVersion=16&charset=utf8}
+      MESSENGER_TRANSPORT_DSN: ${REDIS_URL:-redis://redis:6379}/messages
+      LOCK_DSN: ${LOCK_DSN:-redis://redis:6379/1}
+      CACHE_DSN: ${CACHE_DSN:-redis://redis:6379/2}
       CART_RESERVATION_MINUTES: ${CART_RESERVATION_MINUTES:-15}
     volumes:
       - ./backend:/app

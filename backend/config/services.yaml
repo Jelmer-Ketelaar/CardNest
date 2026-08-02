@@ -29,8 +29,14 @@ services:
     App\Identity\Domain\Repository\EmailVerificationTokenRepository:
         alias: App\Identity\Infrastructure\Persistence\DoctrineEmailVerificationTokenRepository
 
+    App\Identity\Domain\Repository\PasswordResetTokenRepository:
+        alias: App\Identity\Infrastructure\Persistence\DoctrinePasswordResetTokenRepository
+
     App\Identity\Application\Email\EmailVerificationSender:
         alias: App\Identity\Infrastructure\Email\LoggingEmailVerificationSender
+
+    App\Identity\Application\Email\PasswordResetSender:
+        alias: App\Identity\Infrastructure\Email\LoggingPasswordResetSender
 
     App\Identity\Application\Security\LoginRateLimiter:
         arguments:
@@ -40,14 +46,27 @@ services:
         arguments:
             $limiter: '@limiter.email_verification'
 
+    App\Identity\Application\Security\PasswordResetRateLimiter:
+        arguments:
+            $limiter: '@limiter.password_reset'
+
     App\Catalog\Domain\Repository\CardSetRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCardSetRepository
 
     App\Catalog\Domain\Repository\CatalogCardRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCatalogCardRepository
 
+    App\Catalog\Domain\Provider\CardCatalogProvider:
+        alias: App\Catalog\Infrastructure\Provider\TcgDexCardCatalogProvider
+
+    App\Catalog\Application\Import\CatalogImportStore:
+        alias: App\Catalog\Infrastructure\Import\DoctrineCatalogImportStore
+
     App\Collection\Domain\Repository\CollectionItemRepository:
         alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionItemRepository
+
+    App\Collection\Domain\Repository\CollectionRepository:
+        alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionRepository
 
     App\Storage\Domain\Repository\StorageLocationRepository:
         alias: App\Storage\Infrastructure\Persistence\DoctrineStorageLocationRepository
@@ -91,6 +110,15 @@ services:
     App\Review\Domain\Repository\ReviewRepository:
         alias: App\Review\Infrastructure\Persistence\DoctrineReviewRepository
 
+    App\Pricing\Domain\Repository\PriceSnapshotRepository:
+        alias: App\Pricing\Infrastructure\Persistence\DoctrinePriceSnapshotRepository
+
+    App\Pricing\Domain\Repository\TrackedPriceCardRepository:
+        alias: App\Pricing\Infrastructure\Persistence\DoctrineTrackedPriceCardRepository
+
+    App\Pricing\Domain\Provider\MarketPriceProvider:
+        alias: App\Pricing\Infrastructure\Provider\TcgDexMarketPriceProvider
+
     App\Shared\Domain\Transaction\TransactionManager:
         alias: App\Shared\Infrastructure\Persistence\DoctrineTransactionManager
 
@@ -99,5 +127,6 @@ services:
 
 when@test:
     services:
-        App\Payment\Infrastructure\Provider\FakePaymentProvider:
+        App\Payment\Domain\Provider\PaymentProvider:
+            alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
             public: true

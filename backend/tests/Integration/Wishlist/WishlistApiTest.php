@@ -223,6 +223,103 @@ final class WishlistApiTest extends WebTestCase
         self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
     }
 
+    public function testOwnerCanUpdateWishlistItemPreferencesAndRecalculateFulfillment(): void
+    {
+        // Arrange
+        $this->createCollectionItems(2, 'holo', 'en', 'near_mint', 350);
+        $wishlistId = $this->createWishlist();
+        $this->addWishlistItem($wishlistId, [
+            'catalogCardId' => $this->mudkip->getId()->toRfc4122(),
+            'language' => 'en',
+            'variantId' => $this->mudkipHolo->getId()->toRfc4122(),
+            'minimumCondition' => 'excellent',
+            'maxPrice' => 200,
+            'maxCurrency' => 'EUR',
+            'desiredQuantity' => 3,
+            'priority' => 'low',
+            'notes' => 'Initial criteria',
+        ]);
+        self::assertResponseStatusCodeSame(201);
+        $itemId = $this->responseData()['items'][0]['id'] ?? null;
+        self::assertIsString($itemId);
+
+        // Act
+        $this->jsonRequest('PATCH', '/api/v1/me/wishlists/'.$wishlistId.'/items/'.$itemId, [
+            'maxPrice' => 500,
+            'maxCurrency' => 'EUR',
+            'desiredQuantity' => 2,
+            'priority' => 'wanted',
+            'notes' => '  Clean holo copies  ',
+        ], $this->ownerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $updated = $this->responseData()['items'][0] ?? null;
+        self::assertIsArray($updated);
+        self::assertSame(500, $updated['maxPrice']['amount'] ?? null);
+        self::assertSame(2, $updated['desiredQuantity'] ?? null);
+        self::assertSame(2, $updated['fulfilledQuantity'] ?? null);
+        self::assertTrue($updated['completed'] ?? false);
+        self::assertSame('wanted', $updated['priority'] ?? null);
+        self::assertSame('Clean holo copies', $updated['notes'] ?? null);
+
+        // Act
+        $this->jsonRequest('PATCH', '/api/v1/me/wishlists/'.$wishlistId.'/items/'.$itemId, [
+            'clearLanguage' => true,
+            'clearVariant' => true,
+            'clearMinimumCondition' => true,
+            'clearMaxPrice' => true,
+            'clearNotes' => true,
+            'desiredQuantity' => 3,
+        ], $this->ownerToken);
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $cleared = $this->responseData()['items'][0] ?? null;
+        self::assertIsArray($cleared);
+        self::assertNull($cleared['language'] ?? null);
+        self::assertNull($cleared['variant'] ?? null);
+        self::assertNull($cleared['minimumCondition'] ?? null);
+        self::assertNull($cleared['maxPrice'] ?? null);
+        self::assertNull($cleared['notes'] ?? null);
+        self::assertSame(3, $cleared['desiredQuantity'] ?? null);
+        self::assertSame(2, $cleared['fulfilledQuantity'] ?? null);
+        self::assertSame(1, $cleared['remainingQuantity'] ?? null);
+        self::assertFalse($cleared['completed'] ?? true);
+
+        // Act
+        $this->jsonRequest(
+            'PATCH',
+            '/api/v1/me/wishlists/'.$wishlistId.'/items/'.$itemId,
+            ['desiredQuantity' => 1],
+            $this->otherToken,
+        );
+
+        // Assert
+        self::assertResponseStatusCodeSame(404);
+        self::assertSame('wishlist_item_not_found', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->jsonRequest('PATCH', '/api/v1/me/wishlists/'.$wishlistId.'/items/'.$itemId, [
+            'variantId' => $this->pikachuNormal->getId()->toRfc4122(),
+        ], $this->ownerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('card_variant_unavailable', $this->responseData()['error']['code'] ?? null);
+
+        // Act
+        $this->jsonRequest('PATCH', '/api/v1/me/wishlists/'.$wishlistId.'/items/'.$itemId, [
+            'clearMaxPrice' => true,
+            'maxPrice' => 500,
+            'maxCurrency' => 'EUR',
+        ], $this->ownerToken);
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
+    }
+
     private function createWishlist(): string
     {
         $this->jsonRequest('POST', '/api/v1/me/wishlists', ['name' => 'Master set'], $this->ownerToken);
@@ -233,7 +330,7 @@ final class WishlistApiTest extends WebTestCase
         return $id;
     }
 
-    /** @param array<string, int|string> $payload */
+    /** @param array<string, bool|int|string> $payload */
     private function addWishlistItem(string $wishlistId, array $payload): void
     {
         $this->jsonRequest('POST', '/api/v1/me/wishlists/'.$wishlistId.'/items', $payload, $this->ownerToken);
@@ -298,7 +395,7 @@ final class WishlistApiTest extends WebTestCase
         return [$mudkip, $normal, $holo, $pikachuNormal];
     }
 
-    /** @param array<string, int|string> $payload */
+    /** @param array<string, bool|int|string> $payload */
     private function jsonRequest(string $method, string $uri, array $payload, string $token): void
     {
         $this->client->request(

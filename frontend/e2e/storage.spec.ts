@@ -34,6 +34,14 @@ test('a collector can build a nested storage hierarchy', async ({ page }) => {
       return
     }
 
+    if (route.request().method() === 'DELETE') {
+      const locationId = route.request().url().split('/').at(-1)
+      const index = locations.findIndex((location) => location.id === locationId)
+      if (index >= 0) locations.splice(index, 1)
+      await route.fulfill({ status: 204 })
+      return
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -52,4 +60,13 @@ test('a collector can build a nested storage hierarchy', async ({ page }) => {
 
   await expect(page.locator('.storage-list small').filter({ hasText: 'Collectiekamer › Kast links' })).toBeVisible()
   await expect(page.getByText('2 locaties')).toBeVisible()
+
+  const child = page.locator('.storage-list li').filter({ hasText: 'Kast links' })
+  await child.getByRole('button', { name: 'Verwijderen' }).click()
+  await expect(page.getByRole('heading', { name: 'Kast links verwijderen?' })).toBeVisible()
+  await page.getByRole('button', { name: 'Definitief verwijderen' }).click()
+
+  await expect(page.getByText('De opslaglocatie is verwijderd.')).toBeVisible()
+  await expect(page.getByText('1 locaties')).toBeVisible()
+  await expect(page.locator('.storage-list small').filter({ hasText: 'Kast links' })).not.toBeVisible()
 })

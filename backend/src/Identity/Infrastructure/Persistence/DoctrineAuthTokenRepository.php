@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Identity\Infrastructure\Persistence;
 
 use App\Identity\Domain\Entity\AuthToken;
+use App\Identity\Domain\Entity\User;
 use App\Identity\Domain\Repository\AuthTokenRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -36,5 +37,15 @@ final readonly class DoctrineAuthTokenRepository implements AuthTokenRepository
             $this->entityManager->remove($token);
             $this->entityManager->flush();
         }
+    }
+
+    public function revokeAllFor(User $user): void
+    {
+        $this->entityManager->createQueryBuilder()
+            ->delete(AuthToken::class, 'token')
+            ->where('token.user = :user')
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->execute();
     }
 }

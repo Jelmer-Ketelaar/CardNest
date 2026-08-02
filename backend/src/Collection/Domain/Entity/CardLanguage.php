@@ -14,8 +14,17 @@ enum CardLanguage: string
     case French = 'fr';
     case Italian = 'it';
     case Spanish = 'es';
+    case SpanishMexico = 'es-mx';
     case Portuguese = 'pt';
+    case PortugueseBrazil = 'pt-br';
+    case PortuguesePortugal = 'pt-pt';
     case Chinese = 'zh';
+    case ChineseTraditional = 'zh-tw';
+    case ChineseSimplified = 'zh-cn';
+    case Polish = 'pl';
+    case Russian = 'ru';
+    case Indonesian = 'id';
+    case Thai = 'th';
 
     /** @return list<string> */
     public static function values(): array

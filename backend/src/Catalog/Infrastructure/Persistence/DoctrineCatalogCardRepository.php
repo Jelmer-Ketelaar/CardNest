@@ -30,7 +30,6 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
         /** @var list<CatalogCard> $items */
         $items = $this->baseQuery($criteria)
             ->select('c', 's', 'se')
-            ->leftJoin('s.series', 'se')
             ->orderBy('c.name', 'ASC')
             ->addOrderBy('c.numberSortKey', 'ASC')
             ->setFirstResult(($criteria->page - 1) * $criteria->perPage)
@@ -61,10 +60,15 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
     {
         $qb = $this->entityManager->createQueryBuilder()
             ->from(CatalogCard::class, 'c')
-            ->join('c.set', 's');
+            ->join('c.set', 's')
+            ->join('s.series', 'se');
 
         if (null !== $criteria->setId) {
             $qb->andWhere('s.id = :setId')->setParameter('setId', Uuid::fromString($criteria->setId), UuidType::NAME);
+        }
+
+        if (null !== $criteria->seriesId) {
+            $qb->andWhere('se.id = :seriesId')->setParameter('seriesId', Uuid::fromString($criteria->seriesId), UuidType::NAME);
         }
 
         if (null !== $criteria->name && '' !== trim($criteria->name)) {
@@ -81,6 +85,13 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
 
         if (null !== $criteria->rarity && '' !== trim($criteria->rarity)) {
             $qb->andWhere('LOWER(c.rarity) = :rarity')->setParameter('rarity', mb_strtolower(trim($criteria->rarity)));
+        }
+
+        if (null !== $criteria->variant) {
+            $qb
+                ->join('c.variants', 'v')
+                ->andWhere('v.code = :variant')
+                ->setParameter('variant', $criteria->variant->value);
         }
 
         return $qb;

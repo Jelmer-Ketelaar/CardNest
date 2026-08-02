@@ -11,6 +11,7 @@ use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Collection\Domain\Entity\CardCondition;
 use App\Collection\Domain\Entity\CardLanguage;
+use App\Collection\Domain\Entity\Collection;
 use App\Collection\Domain\Entity\CollectionItem;
 use App\Identity\Domain\Entity\User;
 use App\Marketplace\Domain\Entity\Listing;
@@ -58,6 +59,20 @@ final class ListingTest extends TestCase
         // The expected domain exception is the observable result.
     }
 
+    public function testRejectsAnArchivedPhysicalCard(): void
+    {
+        // Arrange
+        [$seller, $item] = $this->collectionItem();
+        $item->archive();
+        $this->expectException(InvalidListing::class);
+
+        // Act
+        $this->listing($seller, $item);
+
+        // Assert
+        // Only currently available physical items can initiate a listing.
+    }
+
     public function testRequiresFrontAndBackPhotosAndShipping(): void
     {
         // Arrange
@@ -88,7 +103,7 @@ final class ListingTest extends TestCase
 
         return [
             $seller,
-            new CollectionItem($seller, $card, $variant, CardLanguage::English, CardCondition::NearMint),
+            new CollectionItem(new Collection($seller), $card, $variant, CardLanguage::English, CardCondition::NearMint),
         ];
     }
 

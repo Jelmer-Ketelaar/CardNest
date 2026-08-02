@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a concrete user or product improvement for CardNest.
+title: '[Feature]: '
+labels:
+  - type:feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the user problem and the outcome CardNest should provide. A proposed implementation is welcome,
+        but it does not replace a clear problem statement. Do not include secrets, payment data, or personal data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Who is affected, and what is difficult or impossible today?
+      placeholder: As a …, I cannot …, which means …
+    validations:
+      required: true
+  - type: textarea
+    id: desired-outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the observable result that would make this request successful.
+      placeholder: CardNest should allow … so that …
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and examples
+      description: Add user stories, constraints, screenshots without personal data, or relevant examples.
+  - type: textarea
+    id: implementation-ideas
+    attributes:
+      label: Optional implementation ideas
+      description: Optional only. Keep this separate from the problem and desired outcome.
+  - type: checkboxes
+    id: clarity
+    attributes:
+      label: Request quality check
+      options:
+        - label: I described a concrete problem and desired outcome, not only an implementation request.
+          required: true

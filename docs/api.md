@@ -31,6 +31,50 @@ rate-limited (5/minute) per normalized e-mail + client IP; exceeding it returns 
 
 `POST /api/v1/auth/logout` revokes the current bearer token and returns `204`.
 
+`POST /api/v1/auth/forgot-password` accepts an e-mail address and always returns `202` for a valid request,
+regardless of whether an account exists. This prevents account enumeration. For an existing account, CardNest stores
+only a hash of a single-use reset token that expires after one hour and queues a reset message. The endpoint is
+rate-limited to three requests per hour per normalized e-mail and IP address. It never returns or logs the plaintext
+reset token.
+
+```json
+{ "email": "collector@example.com" }
+```
+
+Malformed e-mail input returns the standard `422` validation response. Submitting a new request for the same account
+invalidates its previous reset token.
+
+`POST /api/v1/auth/reset-password` confirms a reset with the queued token and a new password:
+
+```json
+{
+  "token": "a 64-character lowercase hexadecimal token",
+  "password": "A-new-strong-password-123",
+  "passwordConfirmation": "A-new-strong-password-123"
+}
+```
+
+It returns `204` on success. The token must be unexpired and can be used only once; invalid, expired, or previously
+used tokens return `400 invalid_password_reset_token`. A successful reset revokes every existing bearer token for
+the account, so the user must sign in again with the new password. Malformed tokens or passwords return `422`.
+
+`GET /api/v1/me` requires a bearer token and returns the authenticated user's safe profile data:
+
+```json
+{
+  "user": {
+    "id": "0198d5ea-37c8-7dd4-a993-48ea916b7e19",
+    "email": "collector@example.com",
+    "roles": ["ROLE_USER"],
+    "emailVerifiedAt": null,
+    "createdAt": "2026-08-01T10:30:00+00:00"
+  }
+}
+```
+
+The response never contains a password hash, bearer token, reset token, or other credential data. Missing or invalid
+authentication returns the standard `401` JSON error.
+
 ## Card catalog
 
 Read-only and public. Describes official card data only — never a card a specific user owns.
@@ -42,14 +86,72 @@ Read-only and public. Describes official card data only — never a card a speci
 | Parameter | Type | Notes |
 | --- | --- | --- |
 | `setId` | UUID | exact card-set match |
+| `seriesId` | UUID | exact card-series match |
 | `name` | string | case-insensitive, partial |
 | `number` | string | case-insensitive, partial |
 | `rarity` | string | case-insensitive, exact |
+| `variant` | string | one of the documented variant codes; cards with that variant only |
 | `page` | int ≥ 1 | default `1` |
 | `perPage` | int 1–100 | default `20` |
 
 `GET /api/v1/cards/{id}` returns one card with its set, every registered variant, raw metadata and external source
 references. Unknown set/card ids return `404`.
+
+### Current price and daily history
+
+`GET /api/v1/cards/{id}/prices?days=30` is public and returns Cardmarket EUR indications plus CardNest's own daily
+history. `days` accepts `2` through `90` and defaults to `30`. When today's measurement is missing, the endpoint
+refreshes the individual source card before returning; repeated reads on the same Amsterdam calendar day use the
+stored snapshot. Open wishlist cards, non-archived collection cards and non-terminal listing cards are also queued
+for refresh every day at 12:00 Europe/Amsterdam.
+
+```json
+{
+  "cardId": "9ddf1d18-42ef-4a52-93d3-ef82e40fac19",
+  "source": "tcgdex",
+  "market": "cardmarket",
+  "currency": "EUR",
+  "refreshStatus": "current",
+  "checkedAt": "2026-08-02T10:05:00+00:00",
+  "prices": [
+    {
+      "variant": "standard",
+      "lowest": { "amount": 2, "currency": "EUR" },
+      "average": { "amount": 11, "currency": "EUR" },
+      "trend": { "amount": 15, "currency": "EUR" },
+      "averageOneDay": { "amount": 5, "currency": "EUR" },
+      "averageSevenDays": { "amount": 13, "currency": "EUR" },
+      "averageThirtyDays": { "amount": 11, "currency": "EUR" },
+      "sourceUpdatedAt": "2026-08-02T08:03:04+00:00",
+      "observedAt": "2026-08-02T10:05:00+00:00",
+      "observedOn": "2026-08-02",
+      "change": { "amount": 3, "currency": "EUR", "percentage": 25 }
+    }
+  ],
+  "history": [
+    {
+      "variant": "standard",
+      "lowest": { "amount": 2, "currency": "EUR" },
+      "average": { "amount": 11, "currency": "EUR" },
+      "trend": { "amount": 15, "currency": "EUR" },
+      "averageOneDay": { "amount": 5, "currency": "EUR" },
+      "averageSevenDays": { "amount": 13, "currency": "EUR" },
+      "averageThirtyDays": { "amount": 11, "currency": "EUR" },
+      "sourceUpdatedAt": "2026-08-02T08:03:04+00:00",
+      "observedAt": "2026-08-02T10:05:00+00:00",
+      "observedOn": "2026-08-02"
+    }
+  ],
+  "disclaimer": "Externe Cardmarket-prijsindicatie via TCGdex; dit is geen gegarandeerde verkoopopbrengst."
+}
+```
+
+`variant` is `standard` or `foil`. Money remains integer minor units. `change` compares the latest trend price with
+the preceding stored daily snapshot and can contain a negative `amount`; it is `null` until two measurements exist.
+`refreshStatus` is `refreshed`, `current`, `no_data`, `unsupported`, or `refresh_failed`. A provider failure does not
+delete older history and starts a five-minute retry cooldown. A distributed card/day lock serializes concurrent
+page and scheduler refreshes. TCGdex does not supply Cardmarket median prices, condition-specific prices, or listing counts,
+so CardNest does not invent them and never labels this indication as guaranteed market value.
 
 List endpoints share one pagination envelope:
 
@@ -165,6 +267,10 @@ while `path` returns the complete root-to-location trail needed to answer “whe
 `parentId` is optional and must identify another location owned by the caller. `GET
 /api/v1/me/storage-locations/{id}` returns one location. `PATCH /api/v1/me/storage-locations/{id}` changes `name`,
 `type`, or its parent; use `clearParent: true` to move it to the root. Cycles and cross-owner parents return `422`.
+`DELETE /api/v1/me/storage-locations/{id}` returns `204` for an empty, unreferenced location. To preserve a card's
+physical-history trail, a location with child locations, a binder association, or any current or past item placement
+cannot be deleted and returns `409 storage_location_in_use`; move cards and binders first, then retain or rename the
+historical location instead.
 
 `POST /api/v1/me/collection-items/{itemId}/location` places or moves one physical card into a generic storage
 location atomically:
@@ -279,8 +385,25 @@ Mint). Adding a goal immediately counts matching cards currently in the collecti
 
 The response preserves `desiredQuantity` and exposes `fulfilledQuantity`, `remainingQuantity`, `completed`, and
 `completedAt`. Registering new physical cards automatically advances every matching open goal, never beyond the
-desired quantity. `DELETE /api/v1/me/wishlists/{id}/items/{itemId}` removes one goal and returns the updated wishlist.
-Foreign wishlist and item UUIDs use owner-safe `404` responses.
+desired quantity.
+
+PATCH /api/v1/me/wishlists/{id}/items/{itemId} updates a goal's preferences without changing its catalog card.
+Only supplied fields are changed; use the corresponding clear flag to remove an optional preference. For example:
+
+~~~json
+{
+  "clearLanguage": true,
+  "maxPrice": 1000,
+  "maxCurrency": "EUR",
+  "desiredQuantity": 3,
+  "priority": "high"
+}
+~~~
+
+Supported clear flags are clearLanguage, clearVariant, clearMinimumCondition, clearMaxPrice, and clearNotes.
+After a preference update, fulfillment is recalculated from the caller's current collection. DELETE
+/api/v1/me/wishlists/{id}/items/{itemId} removes one goal and returns the updated wishlist. Foreign wishlist and item
+UUIDs use owner-safe 404 responses.
 
 ## Marketplace listings
 
@@ -715,7 +838,7 @@ exposed. Unknown users return `404 user_not_found`. `page` must be positive and 
 
 | Concept | Values |
 | --- | --- |
-| Card language | `en`, `nl`, `ja`, `ko`, `de`, `fr`, `it`, `es`, `pt`, `zh` |
+| Card language | `en`, `nl`, `ja`, `ko`, `de`, `fr`, `it`, `es`, `es-mx`, `pt`, `pt-br`, `pt-pt`, `pl`, `ru`, `id`, `th`, `zh`, `zh-cn`, `zh-tw` (`zh` remains supported for existing generic-Chinese records) |
 | Card condition | `mint`, `near_mint`, `excellent`, `good`, `light_played`, `played`, `poor` |
 | Card variant | `normal`, `holo`, `reverse_holo`, `cosmos_holo`, `stamped`, `promo`, `first_edition`, `unlimited`, `shadowless`, `alternate_art`, `illustration_rare`, `special_illustration_rare`, `gold`, `rainbow`, `master_ball`, `poke_ball`, `other` |
 | Collection item status | `in_collection`, `for_sale`, `archived` |
@@ -762,6 +885,7 @@ Every error response follows the same shape:
 | `collection_item_archived` | 409 | Attempted to change an archived collection item |
 | `collection_item_listed` | 409 | Attempted to change or archive a physical item currently for sale |
 | `storage_location_not_found` | 404 | Location doesn't exist, or isn't owned by the caller |
+| `storage_location_in_use` | 409 | Location has child locations, a binder, or item location history |
 | `invalid_storage_hierarchy` | 422 | Parent creates a cycle or belongs to another user |
 | `binder_not_found` | 404 | Binder/slot doesn't exist, or isn't owned by the caller |
 | `binder_slot_occupied` | 409 | Another physical item already occupies the target slot |

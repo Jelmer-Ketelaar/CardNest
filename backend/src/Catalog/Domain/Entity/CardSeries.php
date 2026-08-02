@@ -17,6 +17,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'card_series')]
 #[ORM\UniqueConstraint(name: 'uniq_card_series_name', columns: ['name'])]
+#[ORM\UniqueConstraint(name: 'uniq_card_series_source_key', columns: ['source_key'])]
 final class CardSeries
 {
     #[ORM\Id]
@@ -26,6 +27,8 @@ final class CardSeries
     public function __construct(
         #[ORM\Column(length: 180)]
         private readonly string $name,
+        #[ORM\Column(name: 'source_key', length: 100, nullable: true)]
+        private readonly ?string $sourceKey = null,
         #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
         private readonly DateTimeImmutable $createdAt = new DateTimeImmutable(),
     ) {
@@ -40,6 +43,14 @@ final class CardSeries
     public function getName(): string
     {
         return $this->name;
+    }
+
+    /**
+     * A stable import identity, independent of localized display names.
+     */
+    public function getSourceKey(): ?string
+    {
+        return $this->sourceKey;
     }
 
     public function getCreatedAt(): DateTimeImmutable
