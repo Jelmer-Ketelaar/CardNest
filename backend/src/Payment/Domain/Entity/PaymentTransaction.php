@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Payment\Domain\Entity;
 
+use App\Order\Domain\Entity\Order;
 use App\Shared\Domain\ValueObject\Money;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
@@ -14,6 +15,11 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'payment_transactions')]
 #[ORM\Index(name: 'idx_payment_transactions_payment_time', columns: ['payment_id', 'created_at'])]
+#[ORM\UniqueConstraint(
+    name: 'uniq_successful_refund_transaction_order',
+    columns: ['order_id'],
+    options: ['where' => "(((type)::text = 'refund'::text) AND ((status)::text = 'succeeded'::text))"],
+)]
 final class PaymentTransaction
 {
     #[ORM\Id]
@@ -38,6 +44,9 @@ final class PaymentTransaction
         private readonly ?string $failureReason = null,
         #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
         private readonly DateTimeImmutable $createdAt = new DateTimeImmutable(),
+        #[ORM\ManyToOne(targetEntity: Order::class)]
+        #[ORM\JoinColumn(name: 'order_id', nullable: true, onDelete: 'RESTRICT')]
+        private readonly ?Order $relatedOrder = null,
     ) {
         $this->id = Uuid::v7();
     }
@@ -75,5 +84,10 @@ final class PaymentTransaction
     public function getCreatedAt(): DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getRelatedOrder(): ?Order
+    {
+        return $this->relatedOrder;
     }
 }

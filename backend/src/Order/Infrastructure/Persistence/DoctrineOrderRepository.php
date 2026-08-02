@@ -6,7 +6,9 @@ namespace App\Order\Infrastructure\Persistence;
 
 use App\Identity\Domain\Entity\User;
 use App\Order\Domain\Entity\Order;
+use App\Order\Domain\Entity\OrderStatus;
 use App\Order\Domain\Repository\OrderRepository;
+use App\Payment\Domain\Entity\Payment;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -92,6 +94,22 @@ final readonly class DoctrineOrderRepository implements OrderRepository
         return $order;
     }
 
+    public function hasOtherUnrefundedPaidOrders(Payment $payment, Order $refundedOrder): bool
+    {
+        return (int) $this->entityManager->createQueryBuilder()
+            ->select('COUNT(purchase.id)')
+            ->from(Order::class, 'purchase')
+            ->where('purchase.payment = :payment')
+            ->andWhere('purchase.paidAt IS NOT NULL')
+            ->andWhere('purchase.status != :refunded')
+            ->andWhere('purchase != :refundedOrder')
+            ->setParameter('payment', $payment)
+            ->setParameter('refunded', OrderStatus::Refunded)
+            ->setParameter('refundedOrder', $refundedOrder)
+            ->getQuery()
+            ->getSingleScalarResult() > 0;
+    }
+
     private function detailQuery(): QueryBuilder
     {
         return $this->entityManager->createQueryBuilder()
@@ -101,6 +119,8 @@ final readonly class DoctrineOrderRepository implements OrderRepository
                 'seller',
                 'payment',
                 'transaction',
+                'refund',
+                'refundRequester',
                 'address',
                 'item',
                 'listing',
@@ -119,6 +139,8 @@ final readonly class DoctrineOrderRepository implements OrderRepository
             ->join('purchase.seller', 'seller')
             ->join('purchase.payment', 'payment')
             ->leftJoin('payment.transactions', 'transaction')
+            ->leftJoin('purchase.refund', 'refund')
+            ->leftJoin('refund.requestedBy', 'refundRequester')
             ->join('purchase.shippingAddress', 'address')
             ->join('purchase.items', 'item')
             ->join('item.listing', 'listing')

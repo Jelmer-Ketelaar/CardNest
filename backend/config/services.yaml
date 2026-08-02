@@ -98,6 +98,9 @@ services:
     App\Payment\Domain\Repository\PaymentRepository:
         alias: App\Payment\Infrastructure\Persistence\DoctrinePaymentRepository
 
+    App\Payment\Domain\Repository\RefundRepository:
+        alias: App\Payment\Infrastructure\Persistence\DoctrineRefundRepository
+
     App\Payment\Domain\Provider\PaymentProvider:
         alias: App\Payment\Infrastructure\Provider\FakePaymentProvider
 

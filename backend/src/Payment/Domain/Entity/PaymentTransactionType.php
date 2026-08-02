@@ -7,4 +7,5 @@ namespace App\Payment\Domain\Entity;
 enum PaymentTransactionType: string
 {
     case Charge = 'charge';
+    case Refund = 'refund';
 }

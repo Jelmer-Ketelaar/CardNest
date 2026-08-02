@@ -38,8 +38,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   }
 
   if (response.status === 204) return undefined as T
-  const body = await response.text()
-  if (body === '') return undefined as T
 
-  return JSON.parse(body) as T
+  const body = await response.text()
+  return body.trim() === '' ? undefined as T : JSON.parse(body) as T
 }

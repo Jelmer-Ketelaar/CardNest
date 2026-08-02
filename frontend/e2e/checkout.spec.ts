@@ -66,8 +66,11 @@ function actionableOrder(status: 'paid' | 'shipped' | 'completed') {
       countryCode: 'NL',
     },
     payment: { id: crypto.randomUUID(), status: 'succeeded', provider: 'fake', providerReference: 'fake_test' },
+    cancellation: null,
+    refund: null,
     statusHistory: history,
     availableActions: {
+      cancel: status === 'paid',
       markShipped: status === 'paid',
       confirmReceived: status === 'shipped',
     },
@@ -171,11 +174,13 @@ test('a collector can add a listing and complete a split-ready test checkout', a
       countryCode: 'NL',
     },
     payment: { id: paymentId, status: 'succeeded', provider: 'fake', providerReference: 'fake_test' },
+    cancellation: null,
+    refund: null,
     statusHistory: [
       { id: crypto.randomUUID(), from: null, to: 'pending_payment', actor: { id: crypto.randomUUID() }, occurredAt: now },
       { id: crypto.randomUUID(), from: 'pending_payment', to: 'paid', actor: { id: crypto.randomUUID() }, occurredAt: now },
     ],
-    availableActions: { markShipped: false, confirmReceived: false },
+    availableActions: { cancel: true, markShipped: false, confirmReceived: false },
     paidAt: now,
     completedAt: null,
     createdAt: now,
@@ -252,7 +257,7 @@ test('a seller can mark a paid order as shipped', async ({ page }) => {
   const shippedOrder = {
     ...order,
     status: 'shipped',
-    availableActions: { markShipped: false, confirmReceived: false },
+    availableActions: { cancel: false, markShipped: false, confirmReceived: false },
     statusHistory: [
       ...order.statusHistory,
       { id: crypto.randomUUID(), from: 'paid', to: 'shipped', actor: order.seller, occurredAt: new Date().toISOString() },
@@ -277,13 +282,60 @@ test('a seller can mark a paid order as shipped', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Markeer als verzonden' })).toHaveCount(0)
 })
 
+test('a buyer can cancel a paid order and sees the refund state', async ({ page }) => {
+  const order = {
+    ...actionableOrder('paid'),
+    availableActions: { cancel: true, markShipped: false, confirmReceived: false },
+  }
+  const cancellationReason = 'The seller cannot fulfil the order.'
+  const refundedOrder = {
+    ...order,
+    status: 'refunded',
+    cancellation: {
+      reason: cancellationReason,
+      cancelledBy: order.buyer,
+      cancelledAt: new Date().toISOString(),
+    },
+    refund: { status: 'succeeded', amount: order.costs.total },
+    availableActions: { cancel: false, markShipped: false, confirmReceived: false },
+    statusHistory: [
+      ...order.statusHistory,
+      { id: crypto.randomUUID(), from: 'paid', to: 'cancelled', actor: order.buyer, occurredAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), from: 'cancelled', to: 'refunded', actor: order.buyer, occurredAt: new Date().toISOString() },
+    ],
+  }
+  let cancellationPayload: Record<string, unknown> | null = null
+
+  await page.addInitScript(() => localStorage.setItem('cardnest.authToken', 'buyer-token'))
+  await page.route(/\/api\/v1\/me\/orders$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [order], total: 1 }) })
+  })
+  await mockAuthoredReviews(page)
+  await page.route(new RegExp(`/api/v1/me/orders/${order.id}/cancel$`), async (route) => {
+    expect(route.request().method()).toBe('POST')
+    cancellationPayload = route.request().postDataJSON() as Record<string, unknown>
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(refundedOrder) })
+  })
+
+  await page.goto('/orders')
+  await page.getByRole('button', { name: 'Bestelling annuleren' }).click()
+  await expect(page.getByRole('dialog', { name: 'Bestelling annuleren' })).toBeVisible()
+  await page.getByLabel('Annuleringsreden').fill(cancellationReason)
+  await page.getByRole('button', { name: 'Annuleren en terugbetalen' }).click()
+
+  await expect(page.getByText('Order geannuleerd en € 9,00 terugbetaald.')).toBeVisible()
+  await expect(page.getByText('Terugbetaald', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Bestelling annuleren' })).toHaveCount(0)
+  expect(cancellationPayload).toEqual({ reason: cancellationReason })
+})
+
 test('a buyer can confirm a shipped order as received', async ({ page }) => {
   const order = actionableOrder('shipped')
   const completedOrder = {
     ...order,
     status: 'completed',
     completedAt: new Date().toISOString(),
-    availableActions: { markShipped: false, confirmReceived: false },
+    availableActions: { cancel: false, markShipped: false, confirmReceived: false },
     statusHistory: [
       ...order.statusHistory,
       { id: crypto.randomUUID(), from: 'shipped', to: 'completed', actor: order.buyer, occurredAt: new Date().toISOString() },

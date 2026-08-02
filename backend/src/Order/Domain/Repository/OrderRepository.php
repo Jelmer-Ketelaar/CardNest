@@ -6,6 +6,7 @@ namespace App\Order\Domain\Repository;
 
 use App\Identity\Domain\Entity\User;
 use App\Order\Domain\Entity\Order;
+use App\Payment\Domain\Entity\Payment;
 
 interface OrderRepository
 {
@@ -21,4 +22,6 @@ interface OrderRepository
     public function lockForBuyer(string $id, User $buyer): ?Order;
 
     public function lockForParticipant(string $id, User $participant): ?Order;
+
+    public function hasOtherUnrefundedPaidOrders(Payment $payment, Order $refundedOrder): bool;
 }

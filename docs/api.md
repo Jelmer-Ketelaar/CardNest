@@ -632,6 +632,8 @@ The response contains the shared payment and every newly created seller order:
         "provider": "fake",
         "providerReference": "fake_220f2c32-698a-4548-8a38-6b0dd237a88b"
       },
+      "cancellation": null,
+      "refund": null,
       "statusHistory": [
         {
           "id": "7fd13e4f-ad34-4f58-b1f7-60e3c95cb0d2",
@@ -649,6 +651,7 @@ The response contains the shared payment and every newly created seller order:
         }
       ],
       "availableActions": {
+        "cancel": true,
         "markShipped": false,
         "confirmReceived": false
       },
@@ -666,6 +669,54 @@ The response contains the shared payment and every newly created seller order:
 `404 order_not_found`. Every order DTO contains immutable `statusHistory` entries with the transition actor and
 timestamp. `availableActions` is calculated for the authenticated participant; it is guidance for the UI, while
 the backend independently enforces the same ownership and transition rules.
+
+`POST /api/v1/me/orders/{id}/cancel` lets the buyer or seller cancel an unshipped order. It accepts one required,
+trimmed cancellation reason:
+
+```json
+{
+  "reason": "The card is no longer available."
+}
+```
+
+The backend computes `availableActions.cancel`; it is `true` only for a buyer or seller while the order is
+`pending_payment` or `paid`. `pending_payment → cancelled` creates no financial record. A paid order follows
+`paid → cancelled → refunded` when the fake-provider refund succeeds. The response is `200` and returns the updated
+order with cancellation and refund details:
+
+```json
+{
+  "id": "e6152016-56cb-45d3-9c69-3f8b3edb0152",
+  "status": "refunded",
+  "cancellation": {
+    "reason": "The card is no longer available.",
+    "cancelledBy": { "id": "f9774749-9c03-4cf1-9f66-40b6c1d1e9a4" },
+    "cancelledAt": "2026-08-01T10:30:00+00:00"
+  },
+  "refund": {
+    "status": "succeeded",
+    "amount": { "amount": 900, "currency": "EUR" }
+  },
+  "availableActions": {
+    "cancel": false,
+    "markShipped": false,
+    "confirmReceived": false
+  }
+}
+```
+
+The refund is always the order's immutable `costs.total` snapshot, never a recomputation from a listing or frontend
+input. One shared `Payment` may fund several orders: cancelling one seller order creates a refund only for that
+order and leaves the payment `succeeded` while another funded order remains paid or completed. It becomes
+`refunded` only after every paid order funded by it is refunded. The original listing remains `cancelled` and its
+seller-owned `CollectionItem` returns to `in_collection`; the listing is never republished.
+
+Malformed JSON returns `400 request_failed`. Missing, blank, shorter-than-three-character, or longer-than-500-
+character reasons return `422 validation_failed` with `error.details.reason`. An unknown order or a nonparticipant
+receives owner-safe `404 order_not_found`. Shipped, completed, cancelled, refunded, and disputed orders return
+`409 order_not_cancellable`. If the fake refund provider fails, the endpoint returns `502 refund_failed` and the
+transaction rolls back: the order remains paid, the listing remains sold, and the physical item remains for sale.
+The stable provider idempotency key is `refund-order-{orderUuid}`.
 
 `POST /api/v1/me/orders/{id}/mark-shipped` is seller-only and changes a `paid` order to `shipped`. It creates the
 order's one shipment record and returns the updated order DTO. A buyer or unrelated user receives owner-safe
@@ -710,7 +761,6 @@ The seller's source record remains archived for sale and purchase history. The u
 
 A seller or unrelated user receives owner-safe `404 order_not_found`; a foreign storage location returns
 `404 storage_location_not_found`; a pre-completion or repeated import returns `409 invalid_collection_import`.
-Refunds and cancellations remain outside this increment.
 
 ## Reviews and public reputation
 
@@ -858,10 +908,12 @@ Every error response follows the same shape:
 | `order_item_not_found` | 404 | Item doesn't exist in the buyer's referenced order |
 | `invalid_order` | 422 | Address, totals, currency, seller grouping, or payment data violates an invariant |
 | `invalid_order_transition` | 409 | Order or shipment is not in the required state for the requested participant action |
+| `order_not_cancellable` | 409 | Order has been shipped, completed, cancelled, refunded, disputed, or otherwise cannot be cancelled |
 | `invalid_collection_import` | 409 | Order item is not completed, was already imported, or cannot preserve its card/variant identity |
 | `user_not_found` | 404 | Public reputation was requested for an unknown user |
 | `review_already_exists` | 409 | Caller already reviewed this order |
 | `invalid_review` | 409 | Order is incomplete, participant pairing is invalid, or a review invariant was violated |
 | `payment_failed` | 402 | Payment provider rejected checkout; transaction was rolled back |
+| `refund_failed` | 502 | Fake provider rejected the refund; cancellation was rolled back |
 | `request_failed` | varies | Fallback for other framework HTTP errors (e.g. plain `404` on an unknown route) |
 | `internal_error` | 500 | Unexpected server error (logged server-side, never leaks details) |

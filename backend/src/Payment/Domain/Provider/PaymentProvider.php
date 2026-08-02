@@ -9,4 +9,6 @@ interface PaymentProvider
     public function name(): string;
 
     public function charge(PaymentInstruction $instruction): PaymentResult;
+
+    public function refund(RefundInstruction $instruction): RefundResult;
 }

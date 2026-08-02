@@ -28,6 +28,13 @@ interface ListingRepository
      */
     public function lockForCheckout(array $ids): array;
 
+    /**
+     * @param list<string> $ids
+     *
+     * @return list<Listing>
+     */
+    public function lockByIds(array $ids): array;
+
     public function hasBlockingListing(CollectionItem $item, ?Listing $except = null): bool;
 
     public function save(Listing $listing): void;

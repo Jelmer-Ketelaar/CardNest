@@ -80,6 +80,15 @@ export interface Order {
     provider: string
     providerReference: string | null
   }
+  cancellation: {
+    reason: string
+    cancelledBy: { id: string }
+    cancelledAt: string
+  } | null
+  refund: {
+    status: 'pending' | 'succeeded' | 'failed'
+    amount: Money
+  } | null
   statusHistory: Array<{
     id: string
     from: Order['status'] | null
@@ -88,6 +97,7 @@ export interface Order {
     occurredAt: string
   }>
   availableActions: {
+    cancel: boolean
     markShipped: boolean
     confirmReceived: boolean
   }
