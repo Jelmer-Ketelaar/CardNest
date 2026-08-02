@@ -20,6 +20,7 @@ export interface BinderSlotCollectionItem {
     id: string
     name: string
     number: string
+    imageUrl?: string | null
     thumbnailUrl: string | null
   }
   language: string
@@ -34,7 +35,7 @@ export interface BinderSlot {
   column: number
   collectionItem: BinderSlotCollectionItem | null
   placeholder: {
-    catalogCard: { id: string; name: string; number: string; thumbnailUrl: string | null } | null
+    catalogCard: { id: string; name: string; number: string; imageUrl?: string | null; thumbnailUrl: string | null } | null
     label: string | null
   } | null
 }

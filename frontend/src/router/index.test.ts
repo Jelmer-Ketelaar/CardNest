@@ -35,6 +35,12 @@ describe('router authentication guard', () => {
 
     // Assert
     expect(router.currentRoute.value.name).toBe('catalog-sets')
+
+    // Act
+    await router.push({ name: 'catalog-upcoming' })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('catalog-upcoming')
   })
 
   it('allows an unauthenticated visitor to view a catalog set', async () => {
@@ -57,6 +63,20 @@ describe('router authentication guard', () => {
 
     // Assert
     expect(router.currentRoute.value.name).toBe('catalog-card')
+  })
+
+  it('allows an unauthenticated visitor to browse artists', async () => {
+    // Act
+    await router.push({ name: 'artists' })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('artists')
+
+    // Act
+    await router.push({ name: 'artist-detail', params: { slug: 'mitsuhiro-arita' } })
+
+    // Assert
+    expect(router.currentRoute.value.name).toBe('artist-detail')
   })
 
   it('allows an unauthenticated visitor to view a public marketplace listing', async () => {

@@ -10,6 +10,19 @@ export interface CardArtist {
   role: string
 }
 
+export interface ArtistSummary {
+  id: string
+  name: string
+  slug: string
+  cardCount: number
+}
+
+export interface ArtistDetail extends ArtistSummary {
+  biography: string | null
+  websiteUrl: string | null
+  profileImage: string | null
+}
+
 export interface CardSeries {
   id: string
   name: string

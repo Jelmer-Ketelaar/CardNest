@@ -9,6 +9,7 @@ use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -51,6 +52,43 @@ final class CatalogApiTest extends WebTestCase
         // Assert
         self::assertResponseIsSuccessful();
         self::assertSame($setId, $this->responseData()['id'] ?? null);
+    }
+
+    public function testVisitorCanFilterUpcomingCardSets(): void
+    {
+        // Arrange
+        $futureSet = new CardSet(
+            series: $this->set->getSeries(),
+            name: 'Future English Set',
+            code: 'future-en-'.Uuid::v7()->toRfc4122(),
+            language: 'en',
+            printedTotal: 100,
+            total: 120,
+            status: CardSetStatus::Announced,
+            releaseDate: new DateTimeImmutable('2100-01-02'),
+        );
+        $this->entityManager->persist($futureSet);
+        $this->entityManager->flush();
+
+        // Act
+        $this->client->request('GET', '/api/v1/card-sets?release=upcoming&language=en&name=future');
+
+        // Assert
+        self::assertResponseIsSuccessful();
+        $response = $this->responseData();
+        self::assertSame(1, $response['total'] ?? null);
+        self::assertSame('Future English Set', $response['items'][0]['name'] ?? null);
+        self::assertSame('announced', $response['items'][0]['status'] ?? null);
+    }
+
+    public function testInvalidCardSetFiltersReturnStructuredValidationError(): void
+    {
+        // Act
+        $this->client->request('GET', '/api/v1/card-sets?release=tomorrow&language=xx');
+
+        // Assert
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame('validation_failed', $this->responseData()['error']['code'] ?? null);
     }
 
     public function testVisitorCanSearchAndRetrieveCatalogCards(): void

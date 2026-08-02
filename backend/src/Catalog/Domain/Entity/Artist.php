@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Catalog\Domain\Entity;
 
 use DateTimeImmutable;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Types\UuidType;
@@ -24,6 +26,10 @@ final class Artist
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private DateTimeImmutable $updatedAt;
+
+    /** @var Collection<int, CatalogCardArtist> */
+    #[ORM\OneToMany(mappedBy: 'artist', targetEntity: CatalogCardArtist::class)]
+    private Collection $cardLinks;
 
     /** @param array<string, mixed> $externalReferences */
     public function __construct(
@@ -45,6 +51,7 @@ final class Artist
         private readonly DateTimeImmutable $createdAt = new DateTimeImmutable(),
     ) {
         $this->id = Uuid::v7();
+        $this->cardLinks = new ArrayCollection();
         $this->updatedAt = $createdAt;
     }
 
@@ -67,15 +74,54 @@ final class Artist
         return mb_strtolower(self::canonicalizeName($name));
     }
 
-    public function getId(): Uuid { return $this->id; }
-    public function getCanonicalName(): string { return $this->canonicalName; }
-    public function getNormalizedName(): string { return $this->normalizedName; }
-    public function getSlug(): string { return $this->slug; }
-    public function getBiography(): ?string { return $this->biography; }
-    public function getWebsiteUrl(): ?string { return $this->websiteUrl; }
-    public function getProfileImageUrl(): ?string { return $this->profileImageUrl; }
+    public function getId(): Uuid
+    {
+        return $this->id;
+    }
+
+    public function getCanonicalName(): string
+    {
+        return $this->canonicalName;
+    }
+
+    public function getNormalizedName(): string
+    {
+        return $this->normalizedName;
+    }
+
+    public function getSlug(): string
+    {
+        return $this->slug;
+    }
+
+    public function getBiography(): ?string
+    {
+        return $this->biography;
+    }
+
+    public function getWebsiteUrl(): ?string
+    {
+        return $this->websiteUrl;
+    }
+
+    public function getProfileImageUrl(): ?string
+    {
+        return $this->profileImageUrl;
+    }
+
     /** @return array<string, mixed> */
-    public function getExternalReferences(): array { return $this->externalReferences; }
-    public function getCreatedAt(): DateTimeImmutable { return $this->createdAt; }
-    public function getUpdatedAt(): DateTimeImmutable { return $this->updatedAt; }
+    public function getExternalReferences(): array
+    {
+        return $this->externalReferences;
+    }
+
+    public function getCreatedAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): DateTimeImmutable
+    {
+        return $this->updatedAt;
+    }
 }

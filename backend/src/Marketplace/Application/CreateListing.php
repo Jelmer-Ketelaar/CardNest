@@ -10,6 +10,7 @@ use App\Marketplace\Application\Dto\CreateListingRequest;
 use App\Marketplace\Application\Dto\ListingResponse;
 use App\Marketplace\Domain\Entity\Listing;
 use App\Marketplace\Domain\Entity\ListingImageSide;
+use App\Marketplace\Domain\Exception\InvalidListing;
 use App\Marketplace\Domain\Entity\ShippingMethodCode;
 use App\Marketplace\Domain\Repository\ListingRepository;
 use App\Marketplace\Domain\ValueObject\ListingPhotoReference;
@@ -27,14 +28,21 @@ final readonly class CreateListing
 
     public function create(User $seller, CreateListingRequest $request): ListingResponse
     {
+        $collectionItem = $this->collectionItems->findOwnedItem($seller, $request->collectionItemId);
+        $catalogImageUrl = $collectionItem->getCatalogCard()->getImageUrl()
+            ?? $collectionItem->getCatalogCard()->getThumbnailUrl();
+        if ($catalogImageUrl === null) {
+            throw new InvalidListing('Deze cataloguskaart heeft nog geen officiële afbeelding.');
+        }
+
         $listing = new Listing(
             seller: $seller,
-            collectionItem: $this->collectionItems->findOwnedItem($seller, $request->collectionItemId),
+            collectionItem: $collectionItem,
             price: new Money($request->price, $request->currency),
             shippingOptions: $this->shippingOptions($request),
             photos: [
-                new ListingPhotoReference(ListingImageSide::Front, $request->frontImageUrl),
-                new ListingPhotoReference(ListingImageSide::Back, $request->backImageUrl),
+                new ListingPhotoReference(ListingImageSide::Front, $catalogImageUrl),
+                new ListingPhotoReference(ListingImageSide::Back, $catalogImageUrl),
             ],
             description: $request->description,
             expiresAt: $request->expiresAt !== null ? new DateTimeImmutable($request->expiresAt) : null,

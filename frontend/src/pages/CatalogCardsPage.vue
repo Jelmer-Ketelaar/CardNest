@@ -6,7 +6,7 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import type { PaginatedResponse } from '../types/api'
-import type { CatalogCard } from '../types/catalog'
+import type { ArtistSummary, CatalogCard } from '../types/catalog'
 
 const variantOptions = [
   ['normal', 'Normaal'], ['holo', 'Holo'], ['reverse_holo', 'Reverse holo'], ['cosmos_holo', 'Cosmos holo'],
@@ -34,8 +34,10 @@ const totalPages = ref(0)
 const loading = ref(false)
 const error = ref('')
 const validationMessages = ref<string[]>([])
+const artistSuggestions = ref<ArtistSummary[]>([])
 const filters = reactive<SearchFilters>(filtersFromQuery(route.query))
 let latestRequest = 0
+let artistSuggestionTimer: ReturnType<typeof setTimeout> | null = null
 
 const currentPage = computed(() => pageFromQuery(route.query.page))
 
@@ -125,6 +127,30 @@ async function goToPage(page: number): Promise<void> {
   await router.push({ name: 'catalog-cards', query: routeQuery(page) })
 }
 
+async function loadArtistSuggestions(query: string): Promise<void> {
+  if (query.trim().length < 2) {
+    artistSuggestions.value = []
+    return
+  }
+
+  try {
+    const response = await apiRequest<{ items: ArtistSummary[] }>(
+      `/artists/suggestions?q=${encodeURIComponent(query.trim())}&limit=10`,
+    )
+    artistSuggestions.value = response.items
+  } catch {
+    artistSuggestions.value = []
+  }
+}
+
+watch(
+  () => filters.artist,
+  (value) => {
+    if (artistSuggestionTimer !== null) clearTimeout(artistSuggestionTimer)
+    artistSuggestionTimer = setTimeout(() => { void loadArtistSuggestions(value) }, 250)
+  },
+)
+
 watch(
   () => route.fullPath,
   () => {
@@ -150,7 +176,15 @@ watch(
       <BaseInput id="catalog-card-name" v-model="filters.name" label="Kaartnaam" type="search" />
       <BaseInput id="catalog-card-number" v-model="filters.number" label="Kaartnummer" />
       <BaseInput id="catalog-card-rarity" v-model="filters.rarity" label="Rarity" />
-      <BaseInput id="catalog-card-artist" v-model="filters.artist" label="Artist / illustrator" type="search" />
+      <label class="field" for="catalog-card-artist">
+        <span>Artist / illustrator</span>
+        <input id="catalog-card-artist" v-model="filters.artist" type="search" list="catalog-card-artist-suggestions">
+        <datalist id="catalog-card-artist-suggestions">
+          <option v-for="artist in artistSuggestions" :key="artist.id" :value="artist.name">
+            {{ artist.cardCount }} kaarten
+          </option>
+        </datalist>
+      </label>
       <label class="field">
         <span>Variant</span>
         <select v-model="filters.variant">

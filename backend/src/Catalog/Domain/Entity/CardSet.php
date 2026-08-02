@@ -38,17 +38,17 @@ final class CardSet
         #[ORM\Column(length: 10)]
         private readonly string $language,
         #[ORM\Column(name: 'printed_total')]
-        private readonly int $printedTotal,
+        private int $printedTotal,
         #[ORM\Column]
-        private readonly int $total,
+        private int $total,
         #[ORM\Column(length: 20, enumType: CardSetStatus::class)]
         private CardSetStatus $status,
         #[ORM\Column(name: 'release_date', type: Types::DATE_IMMUTABLE, nullable: true)]
-        private readonly ?DateTimeImmutable $releaseDate = null,
+        private ?DateTimeImmutable $releaseDate = null,
         #[ORM\Column(name: 'logo_url', length: 1024, nullable: true)]
-        private readonly ?string $logoUrl = null,
+        private ?string $logoUrl = null,
         #[ORM\Column(name: 'symbol_url', length: 1024, nullable: true)]
-        private readonly ?string $symbolUrl = null,
+        private ?string $symbolUrl = null,
         #[ORM\Column(type: Types::TEXT, nullable: true)]
         private readonly ?string $description = null,
         #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
@@ -126,5 +126,41 @@ final class CardSet
     public function getUpdatedAt(): DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    /**
+     * Refreshes provider-owned set metadata without touching CardNest's manual
+     * description or the stable source identity (series, code and language).
+     */
+    public function synchronizeFromProvider(
+        string $name,
+        int $printedTotal,
+        int $total,
+        CardSetStatus $status,
+        ?DateTimeImmutable $releaseDate,
+        ?string $logoUrl,
+        ?string $symbolUrl,
+        DateTimeImmutable $syncedAt = new DateTimeImmutable(),
+    ): void {
+        $changed = $this->name !== $name
+            || $this->printedTotal !== $printedTotal
+            || $this->total !== $total
+            || $this->status !== $status
+            || $this->releaseDate?->format('Y-m-d') !== $releaseDate?->format('Y-m-d')
+            || $this->logoUrl !== $logoUrl
+            || $this->symbolUrl !== $symbolUrl;
+
+        if (!$changed) {
+            return;
+        }
+
+        $this->name = $name;
+        $this->printedTotal = $printedTotal;
+        $this->total = $total;
+        $this->status = $status;
+        $this->releaseDate = $releaseDate;
+        $this->logoUrl = $logoUrl;
+        $this->symbolUrl = $symbolUrl;
+        $this->updatedAt = $syncedAt;
     }
 }

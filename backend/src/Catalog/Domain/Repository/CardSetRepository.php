@@ -8,7 +8,7 @@ use App\Catalog\Domain\Entity\CardSet;
 
 interface CardSetRepository
 {
-    public function list(int $page, int $perPage): CardSetSearchResult;
+    public function list(CardSetSearchCriteria $criteria): CardSetSearchResult;
 
     public function get(string $id): ?CardSet;
 

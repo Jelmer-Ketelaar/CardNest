@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace App\Catalog\Infrastructure\Persistence;
 
 use App\Catalog\Domain\Entity\CardSet;
+use App\Catalog\Domain\Repository\CardSetReleaseFilter;
 use App\Catalog\Domain\Repository\CardSetRepository;
+use App\Catalog\Domain\Repository\CardSetSearchCriteria;
 use App\Catalog\Domain\Repository\CardSetSearchResult;
+use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\Uid\Uuid;
@@ -18,24 +22,32 @@ final readonly class DoctrineCardSetRepository implements CardSetRepository
     {
     }
 
-    public function list(int $page, int $perPage): CardSetSearchResult
+    public function list(CardSetSearchCriteria $criteria): CardSetSearchResult
     {
-        $total = (int) $this->baseQuery()
+        $today = new DateTimeImmutable('today', new DateTimeZone('Europe/Amsterdam'));
+        $total = (int) $this->baseQuery($criteria, $today)
             ->select('COUNT(s.id)')
             ->getQuery()
             ->getSingleScalarResult();
 
-        /** @var list<CardSet> $items */
-        $items = $this->baseQuery()
+        $query = $this->baseQuery($criteria, $today)
             ->select('s', 'se')
-            ->leftJoin('s.series', 'se')
-            ->orderBy('s.name', 'ASC')
-            ->setFirstResult(($page - 1) * $perPage)
-            ->setMaxResults($perPage)
+            ->leftJoin('s.series', 'se');
+
+        if ($criteria->release === CardSetReleaseFilter::Upcoming) {
+            $query->orderBy('s.releaseDate', 'ASC')->addOrderBy('s.name', 'ASC');
+        } else {
+            $query->orderBy('s.name', 'ASC');
+        }
+
+        /** @var list<CardSet> $items */
+        $items = $query
+            ->setFirstResult(($criteria->page - 1) * $criteria->perPage)
+            ->setMaxResults($criteria->perPage)
             ->getQuery()
             ->getResult();
 
-        return new CardSetSearchResult($items, $total, $page, $perPage);
+        return new CardSetSearchResult($items, $total, $criteria->page, $criteria->perPage);
     }
 
     public function get(string $id): ?CardSet
@@ -59,10 +71,28 @@ final readonly class DoctrineCardSetRepository implements CardSetRepository
         $this->entityManager->flush();
     }
 
-    private function baseQuery(): QueryBuilder
+    private function baseQuery(CardSetSearchCriteria $criteria, DateTimeImmutable $today): QueryBuilder
     {
-        return $this->entityManager->createQueryBuilder()
+        $query = $this->entityManager->createQueryBuilder()
             ->from(CardSet::class, 's');
+
+        if ($criteria->name !== null && trim($criteria->name) !== '') {
+            $query
+                ->andWhere('LOWER(s.name) LIKE :name')
+                ->setParameter('name', '%'.mb_strtolower(trim($criteria->name)).'%');
+        }
+
+        if ($criteria->language !== null) {
+            $query->andWhere('s.language = :language')->setParameter('language', $criteria->language);
+        }
+
+        if ($criteria->release === CardSetReleaseFilter::Upcoming) {
+            $query->andWhere('s.releaseDate > :today')->setParameter('today', $today);
+        } elseif ($criteria->release === CardSetReleaseFilter::Released) {
+            $query->andWhere('s.releaseDate <= :today')->setParameter('today', $today);
+        }
+
+        return $query;
     }
 
     private function parseUuid(string $id): ?Uuid

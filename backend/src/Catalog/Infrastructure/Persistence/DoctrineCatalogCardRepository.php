@@ -27,11 +27,17 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
             ->getQuery()
             ->getSingleScalarResult();
 
+        $query = $this->baseQuery($criteria)
+            ->select('c', 's', 'se', 'artistLink', 'artist');
+
+        if ($criteria->setId !== null) {
+            $query->orderBy('c.numberSortKey', 'ASC')->addOrderBy('c.id', 'ASC');
+        } else {
+            $query->orderBy('c.name', 'ASC')->addOrderBy('c.numberSortKey', 'ASC');
+        }
+
         /** @var list<CatalogCard> $items */
-        $items = $this->baseQuery($criteria)
-            ->select('c', 's', 'se', 'artistLink', 'artist')
-            ->orderBy('c.name', 'ASC')
-            ->addOrderBy('c.numberSortKey', 'ASC')
+        $items = $query
             ->setFirstResult(($criteria->page - 1) * $criteria->perPage)
             ->setMaxResults($criteria->perPage)
             ->getQuery()
@@ -104,7 +110,7 @@ final readonly class DoctrineCatalogCardRepository implements CatalogCardReposit
 
             $qb
                 ->andWhere('artist.id IN (:artistIds)')
-                ->setParameter('artistIds', $artistIds, UuidType::NAME);
+                ->setParameter('artistIds', $artistIds);
         }
 
         if ($criteria->artist !== null && trim($criteria->artist) !== '') {

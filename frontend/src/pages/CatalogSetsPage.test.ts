@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => {
     ApiError,
     apiRequest: vi.fn(),
     push: vi.fn(),
-    route: { query: {} as Record<string, string> },
+    route: {
+      fullPath: '/catalog/sets',
+      name: 'catalog-sets',
+      query: {} as Record<string, string>,
+    },
   }
 })
 
@@ -44,6 +48,8 @@ describe('CatalogSetsPage', () => {
     mocks.apiRequest.mockReset()
     mocks.push.mockReset()
     mocks.push.mockResolvedValue(undefined)
+    mocks.route.fullPath = '/catalog/sets'
+    mocks.route.name = 'catalog-sets'
     mocks.route.query = {}
   })
 
@@ -86,6 +92,25 @@ describe('CatalogSetsPage', () => {
       name: 'catalog-sets',
       query: { page: '3', source: 'catalog' },
     })
+  })
+
+  it('loads announced sets with search and language filters on the upcoming route', async () => {
+    // Arrange
+    mocks.route.fullPath = '/catalog/upcoming?name=mega&language=en'
+    mocks.route.name = 'catalog-upcoming'
+    mocks.route.query = { name: 'mega', language: 'en' }
+    mocks.apiRequest.mockResolvedValue(pageResponse())
+    const { root } = mountPage()
+
+    // Act
+    await flush()
+
+    // Assert
+    expect(mocks.apiRequest).toHaveBeenCalledWith(
+      '/card-sets?page=1&perPage=20&name=mega&language=en&release=upcoming',
+    )
+    expect(root.querySelector('h1')?.textContent).toContain('Aankomende kaartsets')
+    expect(root.textContent).toContain('Bekijk alle sets')
   })
 
   it('renders accessible empty and API-error states', async () => {

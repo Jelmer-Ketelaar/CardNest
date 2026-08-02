@@ -102,8 +102,6 @@ describe('MyListingsPage', () => {
         price: 750,
         currency: 'EUR',
         pickupAllowed: false,
-        frontImageUrl: 'https://images.example/front.jpg',
-        backImageUrl: 'https://images.example/back.jpg',
         letterMailPrice: 150,
       }),
     })
@@ -120,7 +118,7 @@ describe('MyListingsPage', () => {
       if (path === '/me/collection-items?status=in_collection&perPage=100') return Promise.resolve(paginated([item]))
       if (path === '/listings' && options?.method === 'POST') {
         return Promise.reject(new mocks.ApiError('Controleer de listinggegevens.', 422, 'validation_failed', {
-          frontImageUrl: ['De voorfoto is verplicht.'],
+          price: ['De vraagprijs is verplicht.'],
         }))
       }
 
@@ -136,8 +134,8 @@ describe('MyListingsPage', () => {
 
     // Assert
     expect(root.querySelector('[role="alert"]')?.textContent).toContain('Controleer de listinggegevens.')
-    expect(root.querySelector('#front-image-url-error')?.textContent).toContain('De voorfoto is verplicht.')
-    expect(root.querySelector<HTMLInputElement>('#front-image-url')?.getAttribute('aria-invalid')).toBe('true')
+    expect(root.querySelector('#listing-price-error')?.textContent).toContain('De vraagprijs is verplicht.')
+    expect(root.querySelector<HTMLInputElement>('#listing-price')?.getAttribute('aria-invalid')).toBe('true')
   })
 
   it('surfaces a lifecycle conflict and refreshes the seller listing state', async () => {
@@ -283,8 +281,6 @@ function listingFixture(overrides: Partial<{
 
 function fillRequiredListingFields(root: HTMLDivElement): void {
   fill(root, '#listing-price', '750')
-  fill(root, '#front-image-url', 'https://images.example/front.jpg')
-  fill(root, '#back-image-url', 'https://images.example/back.jpg')
 }
 
 function fill(root: HTMLDivElement, selector: string, value: string): void {

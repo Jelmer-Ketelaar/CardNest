@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AccountPage from '../pages/AccountPage.vue'
+import ArtistDetailPage from '../pages/ArtistDetailPage.vue'
+import ArtistsPage from '../pages/ArtistsPage.vue'
 import DashboardPage from '../pages/DashboardPage.vue'
 import HealthPage from '../pages/HealthPage.vue'
 import CollectionPage from '../pages/CollectionPage.vue'
@@ -29,9 +31,12 @@ export const router = createRouter({
     { path: '/verify-email', name: 'verify-email', component: VerifyEmailPage },
     { path: '/health', name: 'health', component: HealthPage },
     { path: '/catalog/sets', name: 'catalog-sets', component: CatalogSetsPage },
+    { path: '/catalog/upcoming', name: 'catalog-upcoming', component: CatalogSetsPage },
     { path: '/catalog/sets/:id', name: 'catalog-set', component: CatalogSetDetailPage },
     { path: '/catalog/cards', name: 'catalog-cards', component: CatalogCardsPage },
     { path: '/catalog/cards/:id', name: 'catalog-card', component: CatalogCardDetailPage },
+    { path: '/artists', name: 'artists', component: ArtistsPage },
+    { path: '/artists/:slug', name: 'artist-detail', component: ArtistDetailPage },
     { path: '/marketplace', name: 'marketplace', component: MarketplacePage },
     { path: '/marketplace/listings/:id', name: 'marketplace-listing', component: MarketplacePage },
     { path: '/users/:id', name: 'user-profile', component: UserProfilePage },

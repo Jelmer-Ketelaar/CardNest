@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Catalog\Application\Import;
 
+use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CatalogCard;
-use App\Catalog\Domain\Entity\Artist;
 
 /**
  * Persistence port optimized for a large catalog import. It deliberately

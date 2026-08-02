@@ -381,13 +381,22 @@ onMounted(() => { void loadOverview() })
                   :draggable="!saving"
                   @dragstart.stop="startDrag($event, slot.collectionItem.id)"
                 >
-                  <img v-if="slot.collectionItem.card.thumbnailUrl" :src="slot.collectionItem.card.thumbnailUrl" alt="">
+                  <img
+                    v-if="slot.collectionItem.card.thumbnailUrl ?? slot.collectionItem.card.imageUrl"
+                    :src="slot.collectionItem.card.thumbnailUrl ?? slot.collectionItem.card.imageUrl ?? ''"
+                    :alt="`${slot.collectionItem.card.name} ${slot.collectionItem.card.number}`"
+                  >
                   <strong>{{ slot.collectionItem.card.name }}</strong>
                   <small>{{ slot.collectionItem.card.number }} · {{ readableCode(slot.collectionItem.variant) }}</small>
                 </span>
               </template>
               <template v-else-if="slot.placeholder">
                 <span class="slot-placeholder">
+                  <img
+                    v-if="slot.placeholder.catalogCard?.thumbnailUrl ?? slot.placeholder.catalogCard?.imageUrl"
+                    :src="slot.placeholder.catalogCard?.thumbnailUrl ?? slot.placeholder.catalogCard?.imageUrl ?? ''"
+                    :alt="slot.placeholder.catalogCard ? `${slot.placeholder.catalogCard.name} ${slot.placeholder.catalogCard.number}` : ''"
+                  >
                   <strong>{{ slot.placeholder.catalogCard?.name ?? slot.placeholder.label }}</strong>
                   <small v-if="slot.placeholder.catalogCard">{{ slot.placeholder.catalogCard.number }} · ontbreekt</small>
                   <small v-else>Placeholder</small>
@@ -423,6 +432,11 @@ onMounted(() => { void loadOverview() })
               @dragstart="startDrag($event, item.id)"
               @click="selectCollectionItem(item.id)"
             >
+              <img
+                v-if="item.card.thumbnailUrl ?? item.card.imageUrl"
+                :src="item.card.thumbnailUrl ?? item.card.imageUrl ?? ''"
+                :alt="`${item.card.name} ${item.card.number}`"
+              >
               <strong>{{ item.card.name }} · {{ item.card.number }}</strong>
               <span>{{ readableCode(item.variant.code) }} · {{ readableCode(item.condition) }}</span>
             </button>

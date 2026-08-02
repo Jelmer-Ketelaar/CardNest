@@ -7,14 +7,16 @@ namespace App\Catalog\Application;
 use App\Catalog\Application\Dto\CatalogImportResult;
 use App\Catalog\Application\Dto\ImportCatalogRequest;
 use App\Catalog\Application\Import\CatalogImportStore;
+use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CatalogCard;
-use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Provider\CardCatalogProvider;
 use App\Catalog\Domain\Provider\ImportedCardSet;
 use App\Catalog\Domain\Provider\ImportedCatalogCard;
+use DateTimeImmutable;
+use DateTimeZone;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -81,6 +83,19 @@ final readonly class ImportCatalog
         $setCode = $this->setCode($importedSet);
         $existingSet = $this->store->findSetByCode($setCode);
         if ($existingSet instanceof CardSet) {
+            $status = $existingSet->getStatus() === CardSetStatus::OutOfPrint
+                ? CardSetStatus::OutOfPrint
+                : $this->statusForReleaseDate($importedSet->releaseDate);
+            $existingSet->synchronizeFromProvider(
+                name: $importedSet->name,
+                printedTotal: $importedSet->printedTotal,
+                total: $importedSet->total,
+                status: $status,
+                releaseDate: $importedSet->releaseDate,
+                logoUrl: $importedSet->logoUrl,
+                symbolUrl: $importedSet->symbolUrl,
+            );
+            $this->store->persist($existingSet);
             $result->recordExistingSet();
 
             return $existingSet;
@@ -108,7 +123,7 @@ final readonly class ImportCatalog
             language: $importedSet->language,
             printedTotal: $importedSet->printedTotal,
             total: $importedSet->total,
-            status: CardSetStatus::Active,
+            status: $this->statusForReleaseDate($importedSet->releaseDate),
             releaseDate: $importedSet->releaseDate,
             logoUrl: $importedSet->logoUrl,
             symbolUrl: $importedSet->symbolUrl,
@@ -173,8 +188,17 @@ final readonly class ImportCatalog
                         $this->attachImportedArtist($card, $importedCard->illustrator);
                     }
                     $reference->markSynced($importedCard->rawData);
-                } elseif (!$this->containsDetailedSourceData($reference->getRawData())) {
-                    $reference->markSynced($importedCard->rawData);
+                } else {
+                    if ($reference->getCorrectedData() === null) {
+                        $card->synchronizeSummaryFromProvider(
+                            name: $importedCard->name,
+                            imageUrl: $importedCard->imageUrl,
+                            thumbnailUrl: $importedCard->thumbnailUrl,
+                        );
+                    }
+                    if (!$this->containsDetailedSourceData($reference->getRawData())) {
+                        $reference->markSynced($importedCard->rawData);
+                    }
                 }
                 $this->store->persist($card);
                 $result->recordSyncedCard();
@@ -228,5 +252,14 @@ final readonly class ImportCatalog
         }
 
         $card->addArtist($artist);
+    }
+
+    private function statusForReleaseDate(?DateTimeImmutable $releaseDate): CardSetStatus
+    {
+        $today = new DateTimeImmutable('today', new DateTimeZone('Europe/Amsterdam'));
+
+        return $releaseDate instanceof DateTimeImmutable && $releaseDate > $today
+            ? CardSetStatus::Announced
+            : CardSetStatus::Active;
     }
 }

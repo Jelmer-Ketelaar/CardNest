@@ -164,7 +164,17 @@ watch(cardId, (id) => { void loadCard(id) }, { immediate: true })
             <div><dt>Rarity</dt><dd>{{ card.rarity }}</dd></div>
             <div><dt>Type</dt><dd>{{ card.cardType }}</dd></div>
             <div><dt>Pokémon</dt><dd>{{ card.primaryCollectible ?? 'Onbekend' }}</dd></div>
-            <div><dt>Illustrator</dt><dd>{{ card.illustrator ?? 'Onbekend' }}</dd></div>
+            <div>
+              <dt>Illustrator</dt>
+              <dd v-if="card.artists?.length" class="artist-links">
+                <RouterLink
+                  v-for="artist in card.artists"
+                  :key="artist.id"
+                  :to="{ name: 'artist-detail', params: { slug: artist.slug } }"
+                >{{ artist.name }}</RouterLink>
+              </dd>
+              <dd v-else>{{ card.illustrator ?? 'Onbekend' }}</dd>
+            </div>
             <div><dt>Releasedatum</dt><dd>{{ card.releaseDate ?? 'Onbekend' }}</dd></div>
           </dl>
 

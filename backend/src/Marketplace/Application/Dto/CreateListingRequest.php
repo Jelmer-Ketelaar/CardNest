@@ -25,11 +25,9 @@ final readonly class CreateListingRequest
         #[Assert\PositiveOrZero]
         public ?int $parcelPrice = null,
         public bool $pickupAllowed = false,
-        #[Assert\NotBlank]
         #[Assert\Url(protocols: ['https'], requireTld: true)]
         #[Assert\Length(max: 2048)]
         public string $frontImageUrl = '',
-        #[Assert\NotBlank]
         #[Assert\Url(protocols: ['https'], requireTld: true)]
         #[Assert\Length(max: 2048)]
         public string $backImageUrl = '',

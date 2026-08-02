@@ -253,6 +253,32 @@ final class CatalogCard
         $this->updatedAt = $syncedAt;
     }
 
+    /**
+     * Refreshes fields that are present in TCGdex's fast card summaries while
+     * retaining detailed rarity, artist, variant and metadata enrichment.
+     */
+    public function synchronizeSummaryFromProvider(
+        string $name,
+        ?string $imageUrl,
+        ?string $thumbnailUrl,
+        DateTimeImmutable $syncedAt = new DateTimeImmutable(),
+    ): void {
+        $resolvedImageUrl = $imageUrl ?? $this->imageUrl;
+        $resolvedThumbnailUrl = $thumbnailUrl ?? $this->thumbnailUrl;
+        if (
+            $this->name === $name
+            && $this->imageUrl === $resolvedImageUrl
+            && $this->thumbnailUrl === $resolvedThumbnailUrl
+        ) {
+            return;
+        }
+
+        $this->name = $name;
+        $this->imageUrl = $resolvedImageUrl;
+        $this->thumbnailUrl = $resolvedThumbnailUrl;
+        $this->updatedAt = $syncedAt;
+    }
+
     /** @return Collection<int, CardVariant> */
     public function getVariants(): Collection
     {

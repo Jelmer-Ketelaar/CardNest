@@ -56,6 +56,7 @@ describe('App navigation', () => {
 
     // Assert
     expect(navigation?.textContent).toContain('Catalogus')
+    expect(navigation?.textContent).toContain('Aankomende sets')
     expect(navigation?.textContent).toContain('Marktplaats')
     expect(navigation?.textContent).not.toContain('Mijn verzameling')
     expect(root.textContent).toContain('Inloggen')

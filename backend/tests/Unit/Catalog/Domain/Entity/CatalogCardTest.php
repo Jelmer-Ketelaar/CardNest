@@ -101,6 +101,40 @@ final class CatalogCardTest extends TestCase
         self::assertSame($syncedAt, $card->getUpdatedAt());
     }
 
+    public function testSummarySynchronizationAddsImagesWithoutRemovingDetailedData(): void
+    {
+        // Arrange
+        $card = $this->createCard();
+        $card->addVariant(VariantCode::Holo);
+        $card->synchronizeFromProvider(
+            name: 'Mudkip',
+            rarity: 'Rare Holo',
+            cardType: 'Pokemon',
+            primaryCollectible: 'Mudkip',
+            illustrator: 'Yuka Morii',
+            imageUrl: null,
+            thumbnailUrl: null,
+            variants: [VariantCode::Holo],
+            metadata: ['sourceDetailLevel' => 'detail'],
+        );
+        $syncedAt = new DateTimeImmutable('2026-08-02T14:00:00+00:00');
+
+        // Act
+        $card->synchronizeSummaryFromProvider(
+            name: 'Mudkip',
+            imageUrl: 'https://assets.example.test/mudkip/high.webp',
+            thumbnailUrl: 'https://assets.example.test/mudkip/low.webp',
+            syncedAt: $syncedAt,
+        );
+
+        // Assert
+        self::assertSame('Rare Holo', $card->getRarity());
+        self::assertSame('Yuka Morii', $card->getIllustrator());
+        self::assertSame(['sourceDetailLevel' => 'detail'], $card->getMetadata());
+        self::assertSame('https://assets.example.test/mudkip/high.webp', $card->getImageUrl());
+        self::assertSame($syncedAt, $card->getUpdatedAt());
+    }
+
     private function createCard(): CatalogCard
     {
         $series = new CardSeries('Promotional collections');

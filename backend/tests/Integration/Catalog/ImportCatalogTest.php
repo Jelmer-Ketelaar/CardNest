@@ -8,6 +8,8 @@ use App\Catalog\Application\Dto\ImportCatalogRequest;
 use App\Catalog\Application\ImportCatalog;
 use App\Catalog\Domain\Entity\CardExternalReference;
 use App\Catalog\Domain\Entity\CardSeries;
+use App\Catalog\Domain\Entity\CardSet;
+use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Catalog\Domain\Provider\CardCatalogProvider;
@@ -164,7 +166,68 @@ final class ImportCatalogTest extends KernelTestCase
         self::assertSame(2, (int) $this->entityManager->getConnection()->fetchOne('SELECT COUNT(*) FROM card_sets'));
     }
 
-    public function testDetailedImportEnrichesACardCreatedFromTheFastCatalogIndex(): void
+    public function testItRefreshesExistingSetMetadataAndMarksFutureSetsAsAnnounced(): void
+    {
+        // Arrange
+        $provider = new class implements CardCatalogProvider {
+            public string $name = 'Initial Set';
+            public DateTimeImmutable $releaseDate;
+
+            public function __construct()
+            {
+                $this->releaseDate = new DateTimeImmutable('2020-01-01');
+            }
+
+            public function importSets(string $language, array $onlySetIds = []): iterable
+            {
+                yield new ImportedCardSet(
+                    language: $language,
+                    externalId: 'refresh-set',
+                    name: $this->name,
+                    seriesExternalId: 'refresh-series',
+                    seriesName: 'Refresh series',
+                    printedTotal: 1,
+                    total: 1,
+                    releaseDate: $this->releaseDate,
+                    logoUrl: 'https://assets.example.test/refresh/logo.webp',
+                    symbolUrl: null,
+                    cardExternalIds: [],
+                    rawData: ['cards' => []],
+                );
+            }
+
+            public function importCards(ImportedCardSet $set, bool $includeCardDetails = false): iterable
+            {
+                return [];
+            }
+
+            public function findCard(string $language, string $externalId): ?ImportedCatalogCard
+            {
+                return null;
+            }
+        };
+        $importer = new ImportCatalog($provider, new DoctrineCatalogImportStore($this->entityManager));
+
+        // Act
+        $importer->execute(new ImportCatalogRequest(['en']));
+        $provider->name = 'Updated Future Set';
+        $provider->releaseDate = new DateTimeImmutable('2100-03-04');
+        $importer->execute(new ImportCatalogRequest(['en']));
+        $this->entityManager->clear();
+        $series = $this->entityManager->getRepository(CardSeries::class)->findOneBy(['name' => 'Refresh series']);
+        self::assertInstanceOf(CardSeries::class, $series);
+        $cardSet = $this->entityManager->getRepository(CardSet::class)->findOneBy([
+            'series' => $series,
+        ]);
+
+        // Assert
+        self::assertInstanceOf(CardSet::class, $cardSet);
+        self::assertSame('Updated Future Set', $cardSet->getName());
+        self::assertSame('2100-03-04', $cardSet->getReleaseDate()?->format('Y-m-d'));
+        self::assertSame(CardSetStatus::Announced, $cardSet->getStatus());
+    }
+
+    public function testDetailedImportEnrichesACardAndLaterSummaryRefreshKeepsTheDetails(): void
     {
         // Arrange
         $provider = new class implements CardCatalogProvider {
@@ -199,7 +262,9 @@ final class ImportCatalogTest extends KernelTestCase
                     cardType: $includeCardDetails ? 'Pokemon' : 'Unknown',
                     primaryCollectible: $includeCardDetails ? 'Mudkip' : null,
                     illustrator: $includeCardDetails ? 'Yuka Morii' : null,
-                    imageUrl: 'https://assets.example.test/detail/1',
+                    imageUrl: $includeCardDetails
+                        ? 'https://assets.example.test/detail/1'
+                        : 'https://assets.example.test/detail/1-summary',
                     thumbnailUrl: null,
                     releaseDate: null,
                     variants: $includeCardDetails ? [VariantCode::Normal, VariantCode::Holo] : [VariantCode::Normal],
@@ -221,6 +286,7 @@ final class ImportCatalogTest extends KernelTestCase
         // Act
         $importer->execute(new ImportCatalogRequest(['en']));
         $importer->execute(new ImportCatalogRequest(['en'], includeCardDetails: true));
+        $importer->execute(new ImportCatalogRequest(['en']));
         $this->entityManager->clear();
         /** @var CatalogCard $card */
         $card = $this->entityManager->getRepository(CatalogCard::class)->findOneBy(['number' => '1/1']);
@@ -229,6 +295,7 @@ final class ImportCatalogTest extends KernelTestCase
         self::assertSame('Rare Holo', $card->getRarity());
         self::assertSame('Pokemon', $card->getCardType());
         self::assertSame('Yuka Morii', $card->getIllustrator());
+        self::assertSame('https://assets.example.test/detail/1-summary', $card->getImageUrl());
         self::assertSame('detail', $card->getMetadata()['sourceDetailLevel']);
         self::assertSame(['normal', 'holo'], array_map(
             static fn (\App\Catalog\Domain\Entity\CardVariant $variant): string => $variant->getCode()->value,

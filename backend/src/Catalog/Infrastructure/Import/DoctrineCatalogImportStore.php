@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Catalog\Infrastructure\Import;
 
 use App\Catalog\Application\Import\CatalogImportStore;
+use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CatalogCard;
-use App\Catalog\Domain\Entity\Artist;
 use Doctrine\ORM\EntityManagerInterface;
 
 final readonly class DoctrineCatalogImportStore implements CatalogImportStore

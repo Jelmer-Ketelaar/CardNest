@@ -24,13 +24,14 @@ const form = reactive({
   letterMailPrice: '150',
   parcelPrice: '',
   pickupAllowed: false,
-  frontImageUrl: '',
-  backImageUrl: '',
   expiresAt: '',
   description: '',
 })
 
 const isSaving = computed(() => savingAction.value !== null)
+const selectedCollectionItem = computed(() => (
+  collectionItems.value.find((item) => item.id === form.collectionItemId) ?? null
+))
 const eligibleCollectionItems = computed(() => {
   const unavailableItemIds = new Set(
     listings.value
@@ -85,22 +86,12 @@ function resetForm(): void {
   form.letterMailPrice = '150'
   form.parcelPrice = ''
   form.pickupAllowed = false
-  form.frontImageUrl = ''
-  form.backImageUrl = ''
   form.expiresAt = ''
   form.description = ''
 }
 
 function addFieldError(field: string, message: string): void {
   fieldErrors.value = { ...fieldErrors.value, [field]: [message] }
-}
-
-function isHttpsUrl(value: string): boolean {
-  try {
-    return new URL(value).protocol === 'https:'
-  } catch {
-    return false
-  }
 }
 
 function createPayload(): Record<string, boolean | number | string> | null {
@@ -135,8 +126,6 @@ function createPayload(): Record<string, boolean | number | string> | null {
       addFieldError('letterMailPrice', 'Kies minimaal één verzend- of afhaaloptie.')
     }
   }
-  if (!isHttpsUrl(form.frontImageUrl)) addFieldError('frontImageUrl', 'Gebruik een geldige HTTPS-link voor de voorkant.')
-  if (!isHttpsUrl(form.backImageUrl)) addFieldError('backImageUrl', 'Gebruik een geldige HTTPS-link voor de achterkant.')
   if (form.expiresAt && Number.isNaN(new Date(form.expiresAt).valueOf())) {
     addFieldError('expiresAt', 'Kies een geldige einddatum.')
   }
@@ -147,8 +136,6 @@ function createPayload(): Record<string, boolean | number | string> | null {
     price,
     currency: 'EUR',
     pickupAllowed: form.pickupAllowed,
-    frontImageUrl: form.frontImageUrl.trim(),
-    backImageUrl: form.backImageUrl.trim(),
   }
   if (letterMailPrice !== null) payload.letterMailPrice = letterMailPrice
   if (parcelPrice !== null) payload.parcelPrice = parcelPrice
@@ -283,8 +270,17 @@ onMounted(() => { void loadData() })
           <input v-model="form.pickupAllowed" type="checkbox">
           <span>Ophalen toegestaan (€0)</span>
         </label>
-        <BaseInput id="front-image-url" v-model="form.frontImageUrl" label="HTTPS-foto voorkant" type="url" required :error="fieldErrors.frontImageUrl?.[0]" />
-        <BaseInput id="back-image-url" v-model="form.backImageUrl" label="HTTPS-foto achterkant" type="url" required :error="fieldErrors.backImageUrl?.[0]" />
+        <section v-if="selectedCollectionItem" class="catalog-image-preview" aria-label="Automatisch geselecteerde catalogusafbeelding">
+          <img
+            v-if="selectedCollectionItem.card.thumbnailUrl ?? selectedCollectionItem.card.imageUrl"
+            :src="selectedCollectionItem.card.thumbnailUrl ?? selectedCollectionItem.card.imageUrl ?? ''"
+            :alt="`${selectedCollectionItem.card.name} ${selectedCollectionItem.card.number}`"
+          >
+          <div>
+            <strong>Officiële kaartafbeelding</strong>
+            <p>Automatisch geselecteerd uit de catalogus. Dit is geen conditiefoto van jouw exemplaar.</p>
+          </div>
+        </section>
         <BaseInput id="listing-expiration" v-model="form.expiresAt" label="Einddatum (optioneel)" type="datetime-local" :error="fieldErrors.expiresAt?.[0]" />
         <label class="field">
           <span>Aanvullende omschrijving</span>
@@ -299,7 +295,7 @@ onMounted(() => { void loadData() })
             {{ fieldErrors.description[0] }}
           </span>
         </label>
-        <p class="form-help">Sla eerst een concept op als je nog niet wilt publiceren. Foto-uploads via object storage volgen als afzonderlijke infrastructuurstap; deze versie accepteert uitsluitend HTTPS-verwijzingen.</p>
+        <p class="form-help">Sla eerst een concept op als je nog niet wilt publiceren. Eigen conditiefoto’s volgen via een beveiligde bestandsupload; externe afbeeldingslinks worden niet gevraagd.</p>
         <div class="dialog-actions">
           <BaseButton type="button" variant="secondary" :disabled="isSaving || loading" @click="saveDraft">
             {{ savingAction === 'save-draft' ? 'Opslaan…' : 'Concept opslaan' }}

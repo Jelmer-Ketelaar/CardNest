@@ -22,6 +22,8 @@ const navigationToggle = ref<HTMLButtonElement | null>(null)
 const showShell = computed(() => !['login', 'register', 'verify-email'].includes(String(route.name)))
 const publicNavigation: readonly NavigationItem[] = [
   { label: 'Catalogus', to: { name: 'catalog-sets' } },
+  { label: 'Aankomende sets', to: { name: 'catalog-upcoming' } },
+  { label: 'Artists', to: { name: 'artists' } },
   { label: 'Marktplaats', to: { name: 'marketplace' } },
 ]
 const collectionNavigation: readonly NavigationItem[] = [

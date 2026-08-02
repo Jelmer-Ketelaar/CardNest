@@ -23,7 +23,7 @@ final class CatalogCardArtist
         #[ORM\ManyToOne(targetEntity: CatalogCard::class, inversedBy: 'artistLinks')]
         #[ORM\JoinColumn(name: 'catalog_card_id', nullable: false, onDelete: 'CASCADE')]
         private readonly CatalogCard $catalogCard,
-        #[ORM\ManyToOne(targetEntity: Artist::class)]
+        #[ORM\ManyToOne(targetEntity: Artist::class, inversedBy: 'cardLinks')]
         #[ORM\JoinColumn(name: 'artist_id', nullable: false, onDelete: 'RESTRICT')]
         private readonly Artist $artist,
         #[ORM\Column(length: 40)]
@@ -32,9 +32,22 @@ final class CatalogCardArtist
         private readonly int $displayOrder = 0,
         #[ORM\Column(name: 'created_at')]
         private readonly DateTimeImmutable $createdAt = new DateTimeImmutable(),
-    ) { $this->id = Uuid::v7(); }
+    ) {
+        $this->id = Uuid::v7();
+    }
 
-    public function getArtist(): Artist { return $this->artist; }
-    public function getRole(): string { return $this->role; }
-    public function getDisplayOrder(): int { return $this->displayOrder; }
+    public function getArtist(): Artist
+    {
+        return $this->artist;
+    }
+
+    public function getRole(): string
+    {
+        return $this->role;
+    }
+
+    public function getDisplayOrder(): int
+    {
+        return $this->displayOrder;
+    }
 }

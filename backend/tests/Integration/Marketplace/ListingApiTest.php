@@ -541,7 +541,14 @@ final class ListingApiTest extends WebTestCase
         $suffix = Uuid::v7()->toRfc4122();
         $series = new CardSeries('Series '.$suffix);
         $set = new CardSet($series, 'Promo set', 'promo-'.$suffix, 'en', 25, 25, status: CardSetStatus::Active);
-        $card = new CatalogCard($set, 'Mudkip', '19/25', 'Promo', 'Collectible');
+        $card = new CatalogCard(
+            $set,
+            'Mudkip',
+            '19/25',
+            'Promo',
+            'Collectible',
+            imageUrl: 'https://images.example/catalog-mudkip.jpg',
+        );
         $variant = $card->addVariant(VariantCode::Holo);
         $collection = new Collection($seller);
         $first = new CollectionItem($collection, $card, $variant, CardLanguage::English, CardCondition::NearMint);

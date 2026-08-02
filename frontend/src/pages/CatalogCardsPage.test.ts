@@ -107,6 +107,31 @@ describe('CatalogCardsPage', () => {
     expect(root.querySelector('[role="alert"]')?.textContent).toContain('Controleer je zoekfilters.')
     expect(root.querySelector('[aria-label="Validatiefouten"]')?.textContent).toContain('Deze variant is niet geldig.')
   })
+
+  it('loads debounced artist suggestions', async () => {
+    // Arrange
+    mocks.apiRequest.mockImplementation((path: string) => {
+      if (path.startsWith('/artists/suggestions')) {
+        return Promise.resolve({
+          items: [{ id: 'artist-id', name: 'Mitsuhiro Arita', slug: 'mitsuhiro-arita', cardCount: 184 }],
+        })
+      }
+      return Promise.resolve(cardResponse())
+    })
+    const { root } = mountPage()
+    await flush()
+    const input = root.querySelector<HTMLInputElement>('#catalog-card-artist')
+
+    // Act
+    input!.value = 'Arita'
+    input!.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 275))
+    await flush()
+
+    // Assert
+    expect(mocks.apiRequest).toHaveBeenCalledWith('/artists/suggestions?q=Arita&limit=10')
+    expect(root.querySelector('#catalog-card-artist-suggestions')?.textContent).toContain('184 kaarten')
+  })
 })
 
 function cardResponse() {
