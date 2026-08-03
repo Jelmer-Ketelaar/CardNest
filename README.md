@@ -418,6 +418,17 @@ docker compose exec frontend npm run build
 docker compose exec frontend npm run test:e2e
 ```
 
+The fast Playwright suite mocks API responses to isolate browser behavior. Run the separate real-service marketplace
+chain after installing backend and frontend dependencies:
+
+```bash
+bash scripts/run-real-e2e.sh
+```
+
+That command starts `compose.e2e.yaml` under the dedicated `cardnest-real-e2e` Compose project, migrates and seeds
+an ephemeral PostgreSQL database, uses Redis for locks, cache and Messenger, and drives registration through review
+without fulfilling CardNest API requests in Playwright. It removes the isolated containers and data on exit.
+
 ## Learn more
 
 - [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes

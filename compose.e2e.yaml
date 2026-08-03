@@ -1,0 +1,101 @@
+x-backend-environment: &backend-environment
+  APP_ENV: e2e
+  APP_DEBUG: "0"
+  APP_SECRET: cardnest-e2e-secret
+  DATABASE_URL: postgresql://cardnest:cardnest@postgres:5432/cardnest_e2e?serverVersion=16&charset=utf8
+  MESSENGER_TRANSPORT_DSN: redis://redis:6379/e2e_messages
+  LOCK_DSN: redis://redis:6379/1
+  CACHE_DSN: redis://redis:6379/2
+  CART_RESERVATION_MINUTES: "15"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cardnest_e2e
+      POSTGRES_USER: cardnest
+      POSTGRES_PASSWORD: cardnest
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cardnest -d cardnest_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    working_dir: /app
+    command: >-
+      sh -ec "php bin/console doctrine:migrations:migrate --no-interaction
+      && php bin/console doctrine:fixtures:load --append --no-interaction
+      && php -S 0.0.0.0:8000 -t public public/index.php"
+    environment: *backend-environment
+    volumes:
+      - ./backend:/app
+    ports:
+      - "${CARDNEST_E2E_BACKEND_PORT:-18080}:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    working_dir: /app
+    command: php bin/console messenger:consume async --time-limit=3600 --memory-limit=128M --no-interaction
+    environment: *backend-environment
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    working_dir: /app
+    command: npm run dev -- --host 0.0.0.0
+    environment:
+      VITE_API_BASE_URL: /api/v1
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "${CARDNEST_E2E_FRONTEND_PORT:-15173}:5173"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5173/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  frontend_node_modules:

@@ -5,10 +5,17 @@ import globals from 'globals'
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/'],
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'playwright-report/',
+      'playwright-report-real/',
+      'test-results/',
+      'test-results-real/',
+    ],
   },
   {
-    files: ['src/**/*.{ts,vue}', 'e2e/**/*.ts', 'playwright.config.ts'],
+    files: ['src/**/*.{ts,vue}', 'tests/**/*.ts', 'playwright*.config.ts'],
     languageOptions: {
       globals: {
         ...globals.browser,
