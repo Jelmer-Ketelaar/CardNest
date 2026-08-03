@@ -17,7 +17,13 @@ interface PaymentRepository
 
     public function findLatestFinalizedCheckout(ShoppingCart $cart, string $requestFingerprint): ?Payment;
 
-    public function lockById(string $id): ?Payment;
+    /**
+     * Reloads the current payment state under an exclusive lock.
+     *
+     * This starts a fresh persistence phase and must therefore be the first
+     * repository operation in its transaction.
+     */
+    public function reloadAndLockById(string $id): ?Payment;
 
     public function lock(Payment $payment): void;
 

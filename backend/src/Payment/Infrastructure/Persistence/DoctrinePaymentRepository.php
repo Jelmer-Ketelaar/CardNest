@@ -66,7 +66,7 @@ final readonly class DoctrinePaymentRepository implements PaymentRepository
         return $payment;
     }
 
-    public function lockById(string $id): ?Payment
+    public function reloadAndLockById(string $id): ?Payment
     {
         try {
             $uuid = Uuid::fromString($id);
@@ -74,14 +74,21 @@ final readonly class DoctrinePaymentRepository implements PaymentRepository
             return null;
         }
 
-        $payment = $this->entityManager->find(Payment::class, $uuid);
-        if (!$payment instanceof Payment) {
+        // Checkout spans multiple database transactions around the provider call.
+        // Start every locked phase with a fresh identity map so concurrent updates
+        // are hydrated without rewriting readonly value-object properties.
+        $this->entityManager->clear();
+        $lockedId = $this->entityManager->getConnection()->fetchOne(
+            'SELECT id FROM payments WHERE id = CAST(:id AS uuid) FOR UPDATE',
+            ['id' => $uuid->toRfc4122()],
+        );
+        if ($lockedId === false) {
             return null;
         }
 
-        $this->entityManager->refresh($payment, LockMode::PESSIMISTIC_WRITE);
+        $payment = $this->entityManager->find(Payment::class, $uuid);
 
-        return $payment;
+        return $payment instanceof Payment ? $payment : null;
     }
 
     public function lock(Payment $payment): void
@@ -141,11 +148,18 @@ final readonly class DoctrinePaymentRepository implements PaymentRepository
 
         $orders = [];
         foreach ($ids as $id) {
+            $lockedId = $this->entityManager->getConnection()->fetchOne(
+                'SELECT id FROM orders WHERE id = CAST(:id AS uuid) FOR UPDATE',
+                ['id' => (string) $id],
+            );
+            if ($lockedId === false) {
+                continue;
+            }
+
             $order = $this->entityManager->find(Order::class, $id);
             if (!$order instanceof Order) {
                 continue;
             }
-            $this->entityManager->refresh($order, LockMode::PESSIMISTIC_WRITE);
             $order->getItems()->toArray();
             $order->getStatusHistory()->toArray();
             $orders[] = $order;
@@ -167,11 +181,18 @@ final readonly class DoctrinePaymentRepository implements PaymentRepository
 
         $reservations = [];
         foreach ($ids as $id) {
+            $lockedId = $this->entityManager->getConnection()->fetchOne(
+                'SELECT id FROM listing_reservations WHERE id = CAST(:id AS uuid) FOR UPDATE',
+                ['id' => (string) $id],
+            );
+            if ($lockedId === false) {
+                continue;
+            }
+
             $reservation = $this->entityManager->find(ListingReservation::class, $id);
             if (!$reservation instanceof ListingReservation) {
                 continue;
             }
-            $this->entityManager->refresh($reservation, LockMode::PESSIMISTIC_WRITE);
             $reservations[] = $reservation;
         }
 

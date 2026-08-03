@@ -216,7 +216,7 @@ final readonly class CheckoutCart
     {
         /** @var array{Payment, bool} $recorded */
         $recorded = $this->transactions->run(function () use ($payment, $result): array {
-            $locked = $this->payments->lockById($payment->getId()->toRfc4122());
+            $locked = $this->payments->reloadAndLockById($payment->getId()->toRfc4122());
             if (!$locked instanceof Payment) {
                 throw new InvalidPayment('De voorbereide checkoutbetaling bestaat niet meer.');
             }
@@ -237,7 +237,7 @@ final readonly class CheckoutCart
     {
         /** @var Payment $locked */
         $locked = $this->transactions->run(function () use ($payment): Payment {
-            $current = $this->payments->lockById($payment->getId()->toRfc4122());
+            $current = $this->payments->reloadAndLockById($payment->getId()->toRfc4122());
             if (!$current instanceof Payment) {
                 throw new InvalidPayment('De voorbereide checkoutbetaling bestaat niet meer.');
             }
@@ -349,18 +349,19 @@ final readonly class CheckoutCart
      */
     private function lockCheckoutContext(Payment $payment): array
     {
-        $expectedCart = $payment->getCheckoutCart();
+        $lockedPayment = $this->payments->reloadAndLockById($payment->getId()->toRfc4122());
+        if (!$lockedPayment instanceof Payment) {
+            throw new InvalidPayment('De voorbereide checkoutbetaling bestaat niet meer.');
+        }
+
+        $expectedCart = $lockedPayment->getCheckoutCart();
         if (!$expectedCart instanceof ShoppingCart) {
             throw new InvalidPayment('De betaling bevat geen checkoutwinkelmand.');
         }
 
-        $cart = $this->carts->lockForCheckout($payment->getBuyer());
+        $cart = $this->carts->lockForCheckout($lockedPayment->getBuyer());
         if (!$cart instanceof ShoppingCart || !$cart->getId()->equals($expectedCart->getId())) {
             throw new InvalidPayment('De checkoutwinkelmand bestaat niet meer.');
-        }
-        $lockedPayment = $this->payments->lockById($payment->getId()->toRfc4122());
-        if (!$lockedPayment instanceof Payment) {
-            throw new InvalidPayment('De voorbereide checkoutbetaling bestaat niet meer.');
         }
 
         $orders = $this->payments->lockCheckoutOrders($lockedPayment);
