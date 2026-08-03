@@ -1,23 +1,24 @@
 <script setup lang="ts">
+// Vendor
 import { computed, onBeforeUnmount, ref } from 'vue'
 
-import { apiRequest } from '../api/client'
+// Types
 import type { ArtistSummary } from '../types/catalog'
+
+// Utilities
+import { apiRequest } from '../api/client'
 
 interface ArtistSuggestionsResponse {
   items: ArtistSummary[]
 }
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   id: string
   label: string
   modelValue: string
   debounceMs?: number
   minimumQueryLength?: number
-}>(), {
-  debounceMs: 250,
-  minimumQueryLength: 2,
-})
+}>()
 
 const emit = defineEmits<{
   select: [artist: ArtistSummary]
@@ -37,6 +38,8 @@ let requestVersion = 0
 let suggestionTimer: ReturnType<typeof setTimeout> | null = null
 let blurTimer: ReturnType<typeof setTimeout> | null = null
 
+const resolvedDebounceMs = computed(() => props.debounceMs ?? 250)
+const resolvedMinimumQueryLength = computed(() => props.minimumQueryLength ?? 2)
 const listboxId = computed(() => `${props.id}-suggestions`)
 const helpId = computed(() => `${props.id}-help`)
 const activeOptionId = computed(() => {
@@ -106,7 +109,7 @@ const scheduleSuggestions = (value: string): void => {
   hasSearched.value = false
   activeIndex.value = -1
 
-  if (query.length < props.minimumQueryLength) {
+  if (query.length < resolvedMinimumQueryLength.value) {
     suggestions.value = []
     closeSuggestions()
 
@@ -118,7 +121,7 @@ const scheduleSuggestions = (value: string): void => {
   suggestionTimer = setTimeout(() => {
     suggestionTimer = null
     void loadSuggestions(query, version)
-  }, props.debounceMs)
+  }, resolvedDebounceMs.value)
 }
 
 const handleInput = (event: Event): void => {
@@ -278,7 +281,7 @@ onBeforeUnmount(() => {
     </div>
 
     <p :id="helpId" class="visually-hidden">
-      Typ minimaal {{ minimumQueryLength }} tekens en kies een illustrator.
+      Typ minimaal {{ resolvedMinimumQueryLength }} tekens en kies een illustrator.
     </p>
   </div>
 </template>

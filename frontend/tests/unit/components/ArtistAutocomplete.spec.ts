@@ -1,6 +1,11 @@
+// Vendor
 import { createApp, nextTick, type App } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Components
+import ArtistAutocomplete from '../../../src/components/ArtistAutocomplete.vue'
+
+// Types
 import type { ArtistSummary } from '../../../src/types/catalog'
 
 const mocks = vi.hoisted(() => ({
@@ -10,8 +15,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../src/api/client', () => ({
   apiRequest: mocks.apiRequest,
 }))
-
-import ArtistAutocomplete from '../../../src/components/ArtistAutocomplete.vue'
 
 interface Deferred<T> {
   promise: Promise<T>
