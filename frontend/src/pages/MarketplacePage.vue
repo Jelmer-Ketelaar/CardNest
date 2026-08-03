@@ -198,9 +198,11 @@ async function addToCart(listing: Listing): Promise<void> {
   }
 }
 
-async function restoreListingTriggerFocus(): Promise<void> {
+const restoreListingTriggerFocus = async (): Promise<void> => {
   const listingId = listingModalTriggerId.value
-  if (listingId === null) return
+  if (listingId === null) {
+    return
+  }
 
   await nextTick()
   const trigger = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-listing-id]'))
