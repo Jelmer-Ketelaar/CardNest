@@ -13,6 +13,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'catalog_card_artists')]
 #[ORM\UniqueConstraint(name: 'uniq_catalog_card_artist', columns: ['catalog_card_id', 'artist_id'])]
 #[ORM\Index(name: 'idx_catalog_card_artists_artist', columns: ['artist_id'])]
+#[ORM\Index(name: 'idx_catalog_card_artists_card', columns: ['catalog_card_id'])]
 final class CatalogCardArtist
 {
     #[ORM\Id]

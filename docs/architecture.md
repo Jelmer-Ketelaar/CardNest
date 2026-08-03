@@ -356,6 +356,23 @@ reviews, and expose no order or payment references.
   `doctrine:migrations:diff` produces the SQL, which is then reviewed (and check constraints added) by hand before
   committing.
 
+### Database schema lifecycle
+
+Doctrine mapping metadata and reviewed migrations jointly define the supported PostgreSQL schema. Intentional
+indexes have explicit semantic names in mapping attributes so Doctrine upgrades do not rename equivalent indexes
+between releases. A unique B-tree index also serves equality lookups on the same columns; CardNest does not keep a
+second non-unique index with identical columns.
+
+Database defaults are used only when database-side inserts need them. Temporary defaults used to backfill an
+upgrade are removed once the mapped domain constructor owns the value, preventing writes outside the domain from
+silently choosing a lifecycle state. Large or frequently read indexes are dropped or built concurrently in an
+explicitly non-transactional, retry-safe migration; table and column changes remain narrowly scoped and reviewed
+for lock impact.
+
+CI applies the complete migration chain to an empty PostgreSQL database and then runs `doctrine:schema:validate`,
+so a fresh install fails when the migrated schema and current mapping metadata differ. Supported upgrades use only
+forward migrations; `schema:update --force` is never part of deployment.
+
 See [docs/api.md](api.md) for the resulting HTTP contract and [../CONTRIBUTING.md](../CONTRIBUTING.md) for the
 workflow used to add the next module.
 

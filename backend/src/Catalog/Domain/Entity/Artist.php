@@ -18,7 +18,6 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'artists')]
 #[ORM\UniqueConstraint(name: 'uniq_artists_normalized_name', columns: ['normalized_name'])]
 #[ORM\UniqueConstraint(name: 'uniq_artists_slug', columns: ['slug'])]
-#[ORM\Index(name: 'idx_artists_normalized_name', columns: ['normalized_name'])]
 final class Artist
 {
     #[ORM\Id]

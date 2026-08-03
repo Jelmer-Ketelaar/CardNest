@@ -21,6 +21,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'payments')]
 #[ORM\Index(name: 'idx_payments_buyer_created', columns: ['buyer_id', 'created_at'])]
+#[ORM\Index(name: 'idx_payments_checkout_cart', columns: ['checkout_cart_id'])]
 #[ORM\Index(name: 'idx_payments_finalization', columns: ['finalization_status', 'created_at'])]
 #[ORM\UniqueConstraint(name: 'uniq_payment_idempotency_key', columns: ['idempotency_key'])]
 #[ORM\UniqueConstraint(
