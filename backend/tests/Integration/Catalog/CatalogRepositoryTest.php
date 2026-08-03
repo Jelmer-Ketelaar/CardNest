@@ -9,8 +9,8 @@ use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CatalogCard;
 use App\Catalog\Domain\Entity\VariantCode;
-use App\Catalog\Domain\Repository\CardSetRepository;
 use App\Catalog\Domain\Repository\CardSetReleaseFilter;
+use App\Catalog\Domain\Repository\CardSetRepository;
 use App\Catalog\Domain\Repository\CardSetSearchCriteria;
 use App\Catalog\Domain\Repository\CatalogCardRepository;
 use App\Catalog\Domain\Repository\CatalogCardSearchCriteria;
@@ -167,8 +167,7 @@ final class CatalogRepositoryTest extends KernelTestCase
         ?CardSeries $series = null,
         string $language = 'en',
         ?DateTimeImmutable $releaseDate = null,
-    ): CardSet
-    {
+    ): CardSet {
         $suffix = Uuid::v7()->toRfc4122();
         $series ??= new CardSeries('Series '.$suffix);
         $set = new CardSet(
