@@ -131,6 +131,36 @@ describe('CatalogCardsPage', () => {
     // Assert
     expect(mocks.apiRequest).toHaveBeenCalledWith('/artists/suggestions?q=Arita&limit=10')
     expect(root.querySelector('#catalog-card-artist-suggestions')?.textContent).toContain('184 kaarten')
+
+    // Act
+    root.querySelector<HTMLButtonElement>('[role="option"]')?.click()
+    await flush()
+
+    // Assert
+    expect(mocks.push).toHaveBeenCalledWith({
+      name: 'catalog-cards',
+      query: { artist: 'Mitsuhiro Arita' },
+    })
+  })
+
+  it('restores and clears an artist filter from route state', async () => {
+    // Arrange
+    mocks.route.fullPath = '/catalog/cards?artist=Mitsuhiro%20Arita'
+    mocks.route.query = { artist: 'Mitsuhiro Arita' }
+    mocks.apiRequest.mockResolvedValue(cardResponse())
+    const { root } = mountPage()
+    await flush()
+    const clearButton = root.querySelector<HTMLButtonElement>('button[aria-label="Verwijder artistfilter Mitsuhiro Arita"]')
+
+    // Assert
+    expect(root.textContent).toContain('Mitsuhiro Arita')
+
+    // Act
+    clearButton?.click()
+    await flush()
+
+    // Assert
+    expect(mocks.push).toHaveBeenCalledWith({ name: 'catalog-cards', query: {} })
   })
 })
 

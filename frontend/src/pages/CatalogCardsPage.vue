@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+
 import { ApiError, apiRequest } from '../api/client'
+import ArtistAutocomplete from '../components/ArtistAutocomplete.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
+
 import type { PaginatedResponse } from '../types/api'
 import type { ArtistSummary, CatalogCard } from '../types/catalog'
 
@@ -34,10 +37,9 @@ const totalPages = ref(0)
 const loading = ref(false)
 const error = ref('')
 const validationMessages = ref<string[]>([])
-const artistSuggestions = ref<ArtistSummary[]>([])
 const filters = reactive<SearchFilters>(filtersFromQuery(route.query))
+const selectedArtist = ref<Pick<ArtistSummary, 'id' | 'name'> | null>(null)
 let latestRequest = 0
-let artistSuggestionTimer: ReturnType<typeof setTimeout> | null = null
 
 const currentPage = computed(() => pageFromQuery(route.query.page))
 
@@ -63,6 +65,12 @@ function filtersFromQuery(query: Record<string, unknown>): SearchFilters {
     variant: queryValue(query.variant),
     artist: queryValue(query.artist),
   }
+}
+
+const artistSelectionFromQuery = (query: Record<string, unknown>): Pick<ArtistSummary, 'id' | 'name'> | null => {
+  const name = queryValue(query.artist).trim()
+
+  return name === '' ? null : { id: '', name }
 }
 
 function routeQuery(page: number): Record<string, string> {
@@ -127,34 +135,30 @@ async function goToPage(page: number): Promise<void> {
   await router.push({ name: 'catalog-cards', query: routeQuery(page) })
 }
 
-async function loadArtistSuggestions(query: string): Promise<void> {
-  if (query.trim().length < 2) {
-    artistSuggestions.value = []
-    return
-  }
-
-  try {
-    const response = await apiRequest<{ items: ArtistSummary[] }>(
-      `/artists/suggestions?q=${encodeURIComponent(query.trim())}&limit=10`,
-    )
-    artistSuggestions.value = response.items
-  } catch {
-    artistSuggestions.value = []
+const updateArtistQuery = (value: string): void => {
+  filters.artist = value
+  if (selectedArtist.value?.name !== value) {
+    selectedArtist.value = null
   }
 }
 
-watch(
-  () => filters.artist,
-  (value) => {
-    if (artistSuggestionTimer !== null) clearTimeout(artistSuggestionTimer)
-    artistSuggestionTimer = setTimeout(() => { void loadArtistSuggestions(value) }, 250)
-  },
-)
+const selectArtist = async (artist: ArtistSummary): Promise<void> => {
+  filters.artist = artist.name
+  selectedArtist.value = artist
+  await router.push({ name: 'catalog-cards', query: routeQuery(1) })
+}
+
+const clearArtist = async (): Promise<void> => {
+  filters.artist = ''
+  selectedArtist.value = null
+  await router.push({ name: 'catalog-cards', query: routeQuery(1) })
+}
 
 watch(
   () => route.fullPath,
   () => {
     Object.assign(filters, filtersFromQuery(route.query))
+    selectedArtist.value = artistSelectionFromQuery(route.query)
     void loadCards(currentPage.value)
   },
   { immediate: true },
@@ -176,15 +180,13 @@ watch(
       <BaseInput id="catalog-card-name" v-model="filters.name" label="Kaartnaam" type="search" />
       <BaseInput id="catalog-card-number" v-model="filters.number" label="Kaartnummer" />
       <BaseInput id="catalog-card-rarity" v-model="filters.rarity" label="Rarity" />
-      <label class="field" for="catalog-card-artist">
-        <span>Artist / illustrator</span>
-        <input id="catalog-card-artist" v-model="filters.artist" type="search" list="catalog-card-artist-suggestions">
-        <datalist id="catalog-card-artist-suggestions">
-          <option v-for="artist in artistSuggestions" :key="artist.id" :value="artist.name">
-            {{ artist.cardCount }} kaarten
-          </option>
-        </datalist>
-      </label>
+      <ArtistAutocomplete
+        id="catalog-card-artist"
+        label="Artist / illustrator"
+        :model-value="filters.artist"
+        @select="selectArtist"
+        @update:model-value="updateArtistQuery"
+      />
       <label class="field">
         <span>Variant</span>
         <select v-model="filters.variant">
@@ -196,6 +198,19 @@ watch(
       <BaseInput id="catalog-card-series-id" v-model="filters.seriesId" label="Serie-ID" />
       <BaseButton type="submit" :disabled="loading">Zoeken</BaseButton>
     </form>
+
+    <div v-if="selectedArtist" class="active-filter-bar" aria-label="Actieve filters">
+      <span class="active-filter-bar__label">Actieve filter</span>
+      <div class="artist-filter-chip">
+        <span>
+          <span class="artist-filter-chip__label">Artist</span>
+          <strong>{{ selectedArtist.name }}</strong>
+        </span>
+        <button type="button" :aria-label="`Verwijder artistfilter ${selectedArtist.name}`" @click="clearArtist">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+    </div>
 
     <ErrorMessage v-if="error" :message="error" />
     <ul v-if="validationMessages.length > 0" class="validation-summary" aria-label="Validatiefouten">
