@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Catalog\Infrastructure\Provider;
 
 use App\Catalog\Domain\Entity\VariantCode;
+use App\Catalog\Infrastructure\Provider\CatalogProviderException;
 use App\Catalog\Infrastructure\Provider\TcgDexCardCatalogProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -106,5 +107,87 @@ final class TcgDexCardCatalogProviderTest extends TestCase
 
         // Assert
         self::assertNull($card);
+    }
+
+    public function testItImportsAndDeduplicatesArtistCardMappings(): void
+    {
+        // Arrange
+        $client = new MockHttpClient(static function (string $method, string $url): MockResponse {
+            $payloads = [
+                '/en/illustrators' => ['  Mitsuhiro   Arita ', '0313', 'mitsuhiro arita'],
+                '/en/illustrators/Mitsuhiro%20Arita' => [
+                    'name' => 'Mitsuhiro Arita',
+                    'cards' => [
+                        ['id' => 'base1-4', 'name' => 'Charizard'],
+                        ['id' => 'base1-4', 'name' => 'Charizard'],
+                    ],
+                ],
+                '/en/illustrators/0313' => [
+                    'name' => '0313',
+                    'cards' => [['id' => 'sv01-1', 'name' => 'Pikachu']],
+                ],
+            ];
+            $path = (string) parse_url($url, PHP_URL_PATH);
+
+            return new MockResponse(
+                json_encode($payloads[$path] ?? ['message' => 'not found'], JSON_THROW_ON_ERROR),
+                ['http_code' => isset($payloads[$path]) ? 200 : 404],
+            );
+        });
+        $provider = new TcgDexCardCatalogProvider(
+            $client,
+            'https://api.example.test',
+            artistRequestConcurrency: 2,
+        );
+
+        // Act
+        $artists = iterator_to_array($provider->importArtistCardLinks('en'));
+
+        // Assert
+        self::assertCount(2, $artists);
+        self::assertSame('Mitsuhiro Arita', $artists[0]->canonicalName);
+        self::assertSame(['base1-4'], $artists[0]->cardExternalIds);
+        self::assertSame('0313', $artists[1]->canonicalName);
+        self::assertSame(['sv01-1'], $artists[1]->cardExternalIds);
+        self::assertSame(3, $client->getRequestsCount());
+    }
+
+    public function testTargetedArtistImportSkipsTheSourceIndex(): void
+    {
+        // Arrange
+        $client = new MockHttpClient(static function (string $method, string $url): MockResponse {
+            $path = (string) parse_url($url, PHP_URL_PATH);
+            self::assertSame('/ja/illustrators/Yuka%20Morii', $path);
+
+            return new MockResponse(json_encode([
+                'name' => 'Yuka Morii',
+                'cards' => [['id' => 'base1-7', 'name' => 'Squirtle']],
+            ], JSON_THROW_ON_ERROR));
+        });
+        $provider = new TcgDexCardCatalogProvider($client, 'https://api.example.test');
+
+        // Act
+        $artists = iterator_to_array($provider->importArtistCardLinks('ja', ['Yuka Morii']));
+
+        // Assert
+        self::assertCount(1, $artists);
+        self::assertSame('ja', $artists[0]->language);
+        self::assertSame(['base1-7'], $artists[0]->cardExternalIds);
+        self::assertSame(1, $client->getRequestsCount());
+    }
+
+    public function testItRejectsAFailedArtistSourceResponse(): void
+    {
+        // Arrange
+        $client = new MockHttpClient(new MockResponse('{"message":"unavailable"}', ['http_code' => 503]));
+        $provider = new TcgDexCardCatalogProvider($client, 'https://api.example.test');
+        $this->expectException(CatalogProviderException::class);
+        $this->expectExceptionMessage('HTTP status 503');
+
+        // Act
+        iterator_to_array($provider->importArtistCardLinks('en'));
+
+        // Assert
+        // The expected provider exception leaves completed database batches retryable.
     }
 }

@@ -7,24 +7,42 @@ namespace App\Catalog\Infrastructure\Provider;
 use App\Catalog\Domain\Entity\CatalogLanguage;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Catalog\Domain\Provider\CardCatalogProvider;
+use App\Catalog\Domain\Provider\CatalogArtistProvider;
+use App\Catalog\Domain\Provider\ImportedArtistCardLinks;
 use App\Catalog\Domain\Provider\ImportedCardSet;
 use App\Catalog\Domain\Provider\ImportedCatalogCard;
 use DateTimeImmutable;
+use InvalidArgumentException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 use Throwable;
 
 /**
  * TCGdex v2 adapter. It only stores source data and remote asset URLs; images
  * are never downloaded or cached by this provider.
  */
-final readonly class TcgDexCardCatalogProvider implements CardCatalogProvider
+final readonly class TcgDexCardCatalogProvider implements CardCatalogProvider, CatalogArtistProvider
 {
     private const string DEFAULT_BASE_URL = 'https://api.tcgdex.net/v2';
+
+    /** @var int<1, 20> */
+    private int $artistRequestConcurrency;
 
     public function __construct(
         private HttpClientInterface $httpClient,
         private string $baseUrl = self::DEFAULT_BASE_URL,
+        int $artistRequestConcurrency = 8,
     ) {
+        if ($artistRequestConcurrency < 1 || $artistRequestConcurrency > 20) {
+            throw new InvalidArgumentException('Artist request concurrency must be between 1 and 20.');
+        }
+
+        $this->artistRequestConcurrency = $artistRequestConcurrency;
+    }
+
+    public function getProviderName(): string
+    {
+        return 'tcgdex';
     }
 
     public function importSets(string $language, array $onlySetIds = []): iterable
@@ -87,6 +105,77 @@ final readonly class TcgDexCardCatalogProvider implements CardCatalogProvider
         }
 
         return $this->toImportedCard($language, $data);
+    }
+
+    public function importArtistCardLinks(string $language, array $onlyArtistNames = []): iterable
+    {
+        $this->assertSupportedLanguage($language);
+        $sourceNames = $onlyArtistNames === []
+            ? $this->requestList(sprintf('%s/illustrators', rawurlencode($language)))
+            : $onlyArtistNames;
+        $artistNames = [];
+        $seenNames = [];
+        foreach ($sourceNames as $sourceName) {
+            if (!is_string($sourceName) || trim($sourceName) === '') {
+                throw new CatalogProviderException('TCGdex returned an invalid illustrator name.');
+            }
+
+            $canonicalName = $this->canonicalizeSourceName($sourceName);
+            $normalizedName = mb_strtolower($canonicalName);
+            if (isset($seenNames[$normalizedName])) {
+                continue;
+            }
+
+            $seenNames[$normalizedName] = true;
+            $artistNames[] = $canonicalName;
+        }
+
+        foreach (array_chunk($artistNames, $this->artistRequestConcurrency) as $artistBatch) {
+            /** @var list<array{artistName: string, response: ResponseInterface}> $responses */
+            $responses = [];
+            foreach ($artistBatch as $artistName) {
+                $responses[] = [
+                    'artistName' => $artistName,
+                    'response' => $this->requestResponse(sprintf(
+                        '%s/illustrators/%s',
+                        rawurlencode($language),
+                        rawurlencode($artistName),
+                    )),
+                ];
+            }
+
+            foreach ($responses as $artistResponse) {
+                $artistName = $artistResponse['artistName'];
+                $data = $this->responseJson($artistResponse['response']);
+                if ($data === null || array_is_list($data)) {
+                    throw new CatalogProviderException('TCGdex returned an invalid illustrator payload.');
+                }
+
+                $responseName = $this->optionalString($data, 'name');
+                if (
+                    $responseName !== null
+                    && mb_strtolower($this->canonicalizeSourceName($responseName)) !== mb_strtolower($artistName)
+                ) {
+                    throw new CatalogProviderException(sprintf('TCGdex illustrator "%s" returned data for "%s".', $artistName, $responseName));
+                }
+
+                $cardIds = [];
+                foreach ($this->requiredList($data, 'cards', 'illustrator') as $cardSummary) {
+                    if (!is_array($cardSummary) || array_is_list($cardSummary)) {
+                        throw new CatalogProviderException('TCGdex returned an invalid illustrator card summary.');
+                    }
+
+                    $cardIds[] = $this->requiredString($cardSummary, 'id', 'illustrator card summary');
+                }
+
+                yield new ImportedArtistCardLinks(
+                    language: $language,
+                    canonicalName: $artistName,
+                    sourceReference: $artistName,
+                    cardExternalIds: array_values(array_unique($cardIds)),
+                );
+            }
+        }
     }
 
     /** @param array<string, mixed> $summary */
@@ -352,13 +441,27 @@ final readonly class TcgDexCardCatalogProvider implements CardCatalogProvider
     /** @return array<mixed>|null */
     private function requestJson(string $path, bool $allowNotFound = false): ?array
     {
+        return $this->responseJson($this->requestResponse($path), $allowNotFound);
+    }
+
+    private function requestResponse(string $path): ResponseInterface
+    {
         $url = rtrim($this->baseUrl, '/').'/'.ltrim($path, '/');
 
         try {
-            $response = $this->httpClient->request('GET', $url, [
+            return $this->httpClient->request('GET', $url, [
                 'headers' => ['Accept' => 'application/json'],
                 'timeout' => 30.0,
             ]);
+        } catch (Throwable $exception) {
+            throw new CatalogProviderException('TCGdex could not be reached.', previous: $exception);
+        }
+    }
+
+    /** @return array<mixed>|null */
+    private function responseJson(ResponseInterface $response, bool $allowNotFound = false): ?array
+    {
+        try {
             $status = $response->getStatusCode();
             if ($status === 404 && $allowNotFound) {
                 return null;
@@ -375,6 +478,11 @@ final readonly class TcgDexCardCatalogProvider implements CardCatalogProvider
         }
 
         return $data;
+    }
+
+    private function canonicalizeSourceName(string $name): string
+    {
+        return preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name);
     }
 
     /** @param array<string, mixed> $data */

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Catalog\Domain\Entity;
 
+use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
@@ -133,6 +134,64 @@ final class CatalogCardTest extends TestCase
         self::assertSame(['sourceDetailLevel' => 'detail'], $card->getMetadata());
         self::assertSame('https://assets.example.test/mudkip/high.webp', $card->getImageUrl());
         self::assertSame($syncedAt, $card->getUpdatedAt());
+    }
+
+    public function testItSynchronizesASourceBackedArtistIdempotently(): void
+    {
+        // Arrange
+        $card = $this->createCard();
+        $artist = Artist::fromCanonicalName('Mitsuhiro Arita');
+
+        // Act
+        $created = $card->synchronizePrimaryArtist($artist);
+        $createdAgain = $card->synchronizePrimaryArtist($artist);
+
+        // Assert
+        self::assertTrue($created);
+        self::assertFalse($createdAgain);
+        self::assertSame('Mitsuhiro Arita', $card->getIllustrator());
+        self::assertCount(1, $card->getArtistLinks());
+    }
+
+    public function testItKeepsMultipleArtistsInDisplayOrder(): void
+    {
+        // Arrange
+        $card = $this->createCard();
+        $primaryArtist = Artist::fromCanonicalName('Primary Artist');
+        $secondaryArtist = Artist::fromCanonicalName('Secondary Artist');
+
+        // Act
+        $primaryLink = $card->addArtist($primaryArtist);
+        $secondaryLink = $card->addArtist($secondaryArtist, 'secondary_illustrator');
+
+        // Assert
+        self::assertCount(2, $card->getArtistLinks());
+        self::assertSame(0, $primaryLink->getDisplayOrder());
+        self::assertSame('primary_illustrator', $primaryLink->getRole());
+        self::assertSame(1, $secondaryLink->getDisplayOrder());
+        self::assertSame('secondary_illustrator', $secondaryLink->getRole());
+    }
+
+    public function testItPreservesAConflictingLegacyArtistForReview(): void
+    {
+        // Arrange
+        $card = new CatalogCard(
+            set: $this->createCard()->getSet(),
+            name: 'Mudkip',
+            number: '20/25',
+            rarity: 'Promo',
+            cardType: 'Collectible',
+            illustrator: 'Stored Artist',
+        );
+        $sourceArtist = Artist::fromCanonicalName('Source Artist');
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Catalog card artist "Stored Artist" conflicts with source artist "Source Artist".');
+
+        // Act
+        $card->synchronizePrimaryArtist($sourceArtist);
+
+        // Assert
+        // The expected exception keeps the conflicting source attribution explicit.
     }
 
     private function createCard(): CatalogCard

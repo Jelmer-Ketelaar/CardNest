@@ -173,6 +173,41 @@ final class CatalogCard
         return $artistLink;
     }
 
+    /**
+     * Synchronizes a source-backed primary attribution while preserving an
+     * existing conflicting legacy value for explicit discrepancy review.
+     *
+     * @return bool true when a new relational link was added
+     */
+    public function synchronizePrimaryArtist(
+        Artist $artist,
+        DateTimeImmutable $syncedAt = new DateTimeImmutable(),
+    ): bool {
+        if (
+            $this->illustrator !== null
+            && Artist::normalizeName($this->illustrator) !== $artist->getNormalizedName()
+        ) {
+            throw new LogicException(sprintf('Catalog card artist "%s" conflicts with source artist "%s".', $this->illustrator, $artist->getCanonicalName()));
+        }
+
+        foreach ($this->artistLinks as $artistLink) {
+            if ($artistLink->getArtist()->getId()->equals($artist->getId())) {
+                if ($this->illustrator !== $artist->getCanonicalName()) {
+                    $this->illustrator = $artist->getCanonicalName();
+                    $this->updatedAt = $syncedAt;
+                }
+
+                return false;
+            }
+        }
+
+        $this->illustrator = $artist->getCanonicalName();
+        $this->addArtist($artist);
+        $this->updatedAt = $syncedAt;
+
+        return true;
+    }
+
     public function getImageUrl(): ?string
     {
         return $this->imageUrl;
