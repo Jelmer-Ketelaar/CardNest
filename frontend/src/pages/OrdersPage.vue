@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
+import BaseModal from '../components/BaseModal.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import { useAuthStore } from '../stores/auth'
 import type { ShippingMethodCode } from '../types/marketplace'
@@ -445,8 +446,12 @@ onMounted(() => { void loadOrders() })
       </article>
     </section>
 
-    <div v-if="cancelTarget" class="modal-backdrop" @click.self="closeCancellation">
-      <section class="panel edit-panel cancellation-panel" role="dialog" aria-modal="true" aria-labelledby="cancellation-heading">
+    <BaseModal
+      v-if="cancelTarget"
+      heading-id="cancellation-heading"
+      panel-class="edit-panel cancellation-panel"
+      @close="closeCancellation"
+    >
         <p class="eyebrow">Order annuleren</p>
         <h2 id="cancellation-heading">Bestelling annuleren</h2>
         <p v-if="cancelTarget.status === 'paid'">
@@ -480,11 +485,14 @@ onMounted(() => { void loadOrders() })
             </BaseButton>
           </div>
         </form>
-      </section>
-    </div>
+    </BaseModal>
 
-    <div v-if="importTarget" class="modal-backdrop" @click.self="closeCollectionImport">
-      <section class="panel edit-panel order-import-panel" role="dialog" aria-modal="true" aria-labelledby="import-heading">
+    <BaseModal
+      v-if="importTarget"
+      heading-id="import-heading"
+      panel-class="edit-panel order-import-panel"
+      @close="closeCollectionImport"
+    >
         <p class="eyebrow">Ontvangen aankoop</p>
         <h2 id="import-heading">{{ importTarget.item.card.name }} toevoegen</h2>
         <p>Controleer het fysieke exemplaar. Kaart, variant en aankoopprijs komen rechtstreeks uit de order.</p>
@@ -524,11 +532,14 @@ onMounted(() => { void loadOrders() })
             </BaseButton>
           </div>
         </form>
-      </section>
-    </div>
+    </BaseModal>
 
-    <div v-if="reviewTarget" class="modal-backdrop" @click.self="closeReview">
-      <section class="panel edit-panel review-panel" role="dialog" aria-modal="true" aria-labelledby="review-heading">
+    <BaseModal
+      v-if="reviewTarget"
+      heading-id="review-heading"
+      panel-class="edit-panel review-panel"
+      @close="closeReview"
+    >
         <p class="eyebrow">Voltooide transactie</p>
         <h2 id="review-heading">Review plaatsen</h2>
         <p>Beoordeel de andere deelnemer van order {{ reviewTarget.id.slice(0, 8) }}.</p>
@@ -574,7 +585,6 @@ onMounted(() => { void loadOrders() })
             </BaseButton>
           </div>
         </form>
-      </section>
-    </div>
+    </BaseModal>
   </main>
 </template>

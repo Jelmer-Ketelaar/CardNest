@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
+import BaseModal from '../components/BaseModal.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import type { PaginatedResponse } from '../types/api'
 import type { BinderCollectionResponse, BinderDetail, BinderSlot } from '../types/binder'
@@ -447,8 +448,12 @@ onMounted(() => { void loadOverview() })
       <p v-else-if="!loading" class="empty-state binder-empty">Maak een binder aan om de visuele planner te openen.</p>
     </section>
 
-    <div v-if="configuringSlot" class="modal-backdrop" @click.self="configuringSlot = null">
-      <section class="panel edit-panel" role="dialog" aria-modal="true" aria-labelledby="placeholder-heading">
+    <BaseModal
+      v-if="configuringSlot"
+      heading-id="placeholder-heading"
+      panel-class="edit-panel"
+      @close="configuringSlot = null"
+    >
         <p class="eyebrow">Vak {{ configuringSlot.position }}</p>
         <h2 id="placeholder-heading">Placeholder instellen</h2>
         <form @submit.prevent="configurePlaceholder({ label: placeholderLabel })">
@@ -475,7 +480,6 @@ onMounted(() => { void loadOverview() })
           <BaseButton v-if="configuringSlot.placeholder" variant="danger" @click="configurePlaceholder({ clear: true })">Placeholder wissen</BaseButton>
           <BaseButton variant="secondary" @click="configuringSlot = null">Sluiten</BaseButton>
         </div>
-      </section>
-    </div>
+    </BaseModal>
   </main>
 </template>

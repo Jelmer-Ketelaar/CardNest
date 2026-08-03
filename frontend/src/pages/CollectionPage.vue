@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
+import BaseModal from '../components/BaseModal.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import type { PaginatedResponse } from '../types/api'
 import type { CatalogCard, CatalogCardVariant } from '../types/catalog'
@@ -596,8 +597,7 @@ onMounted(() => {
       <BaseButton variant="secondary" :disabled="page >= totalPages || loading" @click="goToPage(page + 1)">Volgende</BaseButton>
     </nav>
 
-    <div v-if="editingItem" class="modal-backdrop" @click.self="closeEdit">
-      <section class="panel edit-panel" role="dialog" aria-modal="true" aria-labelledby="edit-heading">
+    <BaseModal v-if="editingItem" heading-id="edit-heading" panel-class="edit-panel" @close="closeEdit">
         <p class="eyebrow">Fysiek exemplaar</p>
         <h2 id="edit-heading">{{ editingItem.card.name }} bewerken</h2>
         <p class="immutable-note">
@@ -691,7 +691,6 @@ onMounted(() => {
             <BaseButton type="submit" :disabled="editSaving">{{ editSaving ? 'Opslaan…' : 'Opslaan' }}</BaseButton>
           </div>
         </form>
-      </section>
-    </div>
+    </BaseModal>
   </main>
 </template>
