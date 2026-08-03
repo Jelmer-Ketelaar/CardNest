@@ -87,6 +87,7 @@ test('a collector can publish a physical collection item', async ({ page }) => {
     updatedAt: new Date().toISOString(),
   }
   let listing: ReturnType<typeof listingFixture> | null = null
+  let createRequestBody: string | null = null
 
   await page.addInitScript(() => localStorage.setItem('cardnest.authToken', 'test-token'))
   await page.route(/\/api\/v1\/me\/listings$/, async (route) => {
@@ -104,6 +105,7 @@ test('a collector can publish a physical collection item', async ({ page }) => {
     })
   })
   await page.route(/\/api\/v1\/listings$/, async (route) => {
+    createRequestBody = route.request().postData()
     listing = { ...listingFixture('draft'), collectionItemId }
     await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(listing) })
   })
@@ -114,10 +116,18 @@ test('a collector can publish a physical collection item', async ({ page }) => {
 
   await page.goto(`/my-listings?itemId=${collectionItemId}`)
   await page.getByLabel('Vaste vraagprijs (centen)').fill('750')
-  await page.getByLabel('HTTPS-foto voorkant').fill('https://images.example/front.jpg')
-  await page.getByLabel('HTTPS-foto achterkant').fill('https://images.example/back.jpg')
+  await expect(page.getByText(/externe afbeeldingslinks worden niet gevraagd/i)).toBeVisible()
+  await expect(page.getByLabel('HTTPS-foto voorkant')).toHaveCount(0)
+  await expect(page.getByLabel('HTTPS-foto achterkant')).toHaveCount(0)
   await page.getByRole('button', { name: 'Concept opslaan' }).click()
 
+  expect(createRequestBody).toBe(JSON.stringify({
+    collectionItemId,
+    price: 750,
+    currency: 'EUR',
+    pickupAllowed: false,
+    letterMailPrice: 150,
+  }))
   await expect(page.getByText('Concept opgeslagen. Publiceer de listing wanneer je klaar bent.')).toBeVisible()
   await expect(page.getByText('Concept', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Publiceren', exact: true }).click()
