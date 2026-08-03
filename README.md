@@ -43,7 +43,9 @@ CardNest is implemented incrementally, one module at a time. This is the current
 
 - Browse card series and sets (`GET /api/v1/card-sets`), each with release date, language, printed/total card
   counts, and lifecycle status (announced, active, out of print, unknown)
-- Search the catalog (`GET /api/v1/cards`) filtered by set, series, name, card number, rarity, or variant, with pagination
+- Search the catalog (`GET /api/v1/cards`) filtered by set, series, name, card number, rarity, variant, or artist,
+  with pagination
+- Search normalized artist records with autocomplete and browse public artist pages
 - Look up a single set or card in full detail, including every variant it was printed in (holo, reverse holo,
   illustration rare, ...) drawn from a closed, configurable vocabulary instead of free text
 - Import official set and card data from TCGdex through a provider adapter. The import is resumable and idempotent:
@@ -381,6 +383,22 @@ illustrator and similar data), run a later, slower pass:
 docker compose exec backend php bin/console --no-debug catalog:import:tcgdex --with-card-details
 ```
 
+Artist attribution can be reconciled independently and more efficiently through TCGdex's illustrator index. The
+command imports every source artist for languages already present in the local catalog, backfills legacy illustrator
+strings, and only links cards for which CardNest has the exact provider reference:
+
+```bash
+docker compose exec backend php bin/console --no-debug catalog:import:tcgdex-artists
+```
+
+Use `--language=en` or `--artist='Mitsuhiro Arita'` for a bounded retry. The import is idempotent and reports missing
+local cards and conflicting stored attributions instead of guessing. “All artists” therefore means every artist
+returned by the configured provider within the imported language scope; it is not a claim of global catalog
+completeness.
+
+`TCGDEX_ARTIST_REQUEST_CONCURRENCY` controls the bounded number of in-flight artist-detail requests and accepts
+`1`–`20` (default `8`). Keep this conservative and aligned with the provider's current usage policy.
+
 TCGdex publishes different levels of coverage per language. CardNest imports every record the source provides, but
 does not invent records missing upstream. The importer only saves source-provided external image URLs; it does not
 download or locally cache card artwork. Review the image/data source terms before enabling this import in production.
@@ -403,6 +421,7 @@ docker compose exec frontend npm run test:e2e
 ## Learn more
 
 - [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes
+- [docs/catalog.md](docs/catalog.md) — catalog entities, artist reconciliation, source scope, and data limitations
 - [docs/architecture.md](docs/architecture.md) — system diagram, module layering, and an end-to-end request walkthrough
 - [docs/security-review.md](docs/security-review.md) — repeatable MVP security release gate and evidence template
 - [docs/release-checklist.md](docs/release-checklist.md) — MVP quality, security, accessibility and deployment release gate

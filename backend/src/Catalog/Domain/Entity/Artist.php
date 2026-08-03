@@ -9,6 +9,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use InvalidArgumentException;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\Uid\Uuid;
@@ -50,6 +51,19 @@ final class Artist
         #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
         private readonly DateTimeImmutable $createdAt = new DateTimeImmutable(),
     ) {
+        if ($canonicalName === '' || self::canonicalizeName($canonicalName) !== $canonicalName) {
+            throw new InvalidArgumentException('An artist canonical name is required and must use normalized whitespace.');
+        }
+        if ($normalizedName !== self::normalizeName($canonicalName)) {
+            throw new InvalidArgumentException('An artist normalized name must match its canonical name.');
+        }
+        if ($slug === '') {
+            throw new InvalidArgumentException('An artist slug is required.');
+        }
+        if (mb_strlen($canonicalName) > 180 || mb_strlen($normalizedName) > 180 || mb_strlen($slug) > 220) {
+            throw new InvalidArgumentException('Artist identity fields exceed their supported length.');
+        }
+
         $this->id = Uuid::v7();
         $this->cardLinks = new ArrayCollection();
         $this->updatedAt = $createdAt;
@@ -123,5 +137,33 @@ final class Artist
     public function getUpdatedAt(): DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    public function recordExternalReference(
+        string $provider,
+        string $language,
+        string $sourceReference,
+        DateTimeImmutable $syncedAt = new DateTimeImmutable(),
+    ): void {
+        if (trim($provider) === '' || trim($language) === '' || trim($sourceReference) === '') {
+            throw new InvalidArgumentException('Artist source references require a provider, language, and reference.');
+        }
+
+        $providerReferences = $this->externalReferences[$provider] ?? [];
+        if (!is_array($providerReferences)) {
+            $providerReferences = [];
+        }
+
+        $referencesByLanguage = $providerReferences['referencesByLanguage'] ?? [];
+        if (!is_array($referencesByLanguage)) {
+            $referencesByLanguage = [];
+        }
+
+        $referencesByLanguage[$language] = $sourceReference;
+        ksort($referencesByLanguage);
+        $providerReferences['referencesByLanguage'] = $referencesByLanguage;
+        $providerReferences['lastSyncedAt'] = $syncedAt->format(DATE_ATOM);
+        $this->externalReferences[$provider] = $providerReferences;
+        $this->updatedAt = $syncedAt;
     }
 }

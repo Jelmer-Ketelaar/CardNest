@@ -8,6 +8,7 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     env(CART_RESERVATION_MINUTES): '15'
+    env(TCGDEX_ARTIST_REQUEST_CONCURRENCY): '8'
 
 services:
     # default configuration for services in *this* file
@@ -62,8 +63,18 @@ services:
     App\Catalog\Domain\Provider\CardCatalogProvider:
         alias: App\Catalog\Infrastructure\Provider\TcgDexCardCatalogProvider
 
+    App\Catalog\Domain\Provider\CatalogArtistProvider:
+        alias: App\Catalog\Infrastructure\Provider\TcgDexCardCatalogProvider
+
+    App\Catalog\Infrastructure\Provider\TcgDexCardCatalogProvider:
+        arguments:
+            $artistRequestConcurrency: '%env(int:TCGDEX_ARTIST_REQUEST_CONCURRENCY)%'
+
     App\Catalog\Application\Import\CatalogImportStore:
         alias: App\Catalog\Infrastructure\Import\DoctrineCatalogImportStore
+
+    App\Catalog\Application\Import\CatalogArtistImportStore:
+        alias: App\Catalog\Infrastructure\Import\DoctrineCatalogArtistImportStore
 
     App\Collection\Domain\Repository\CollectionItemRepository:
         alias: App\Collection\Infrastructure\Persistence\DoctrineCollectionItemRepository

@@ -91,11 +91,29 @@ Read-only and public. Describes official card data only — never a card a speci
 | `number` | string | case-insensitive, partial |
 | `rarity` | string | case-insensitive, exact |
 | `variant` | string | one of the documented variant codes; cards with that variant only |
+| `artistIds[]` | UUID[] | cards attributed to any selected artist (OR behavior) |
+| `artist` | string | case-insensitive, partial artist-name match |
 | `page` | int ≥ 1 | default `1` |
 | `perPage` | int 1–100 | default `20` |
 
 `GET /api/v1/cards/{id}` returns one card with its set, every registered variant, raw metadata and external source
 references. Unknown set/card ids return `404`.
+
+### Artists
+
+`GET /api/v1/artists?q=&sort=name&withCardsOnly=true&page=1&perPage=24` lists canonical artists. `sort` accepts
+`name` or `card_count`; `perPage` is capped at 100. Every page returns the shared pagination envelope, and every item
+contains `id`, `name`, `slug`, and `cardCount`.
+
+`GET /api/v1/artists/suggestions?q=arita&limit=10` returns case-insensitive autocomplete results. The endpoint caps
+the limit at ten and prioritizes the repository's configured name matching. Empty or too-short product queries are
+normally suppressed by the frontend.
+
+`GET /api/v1/artists/{id}` and `GET /api/v1/artists/slug/{slug}` return artist details. Optional biography, website,
+and profile-image fields remain `null` unless a trustworthy source and usage rights are available.
+
+`GET /api/v1/artists/{id}/cards?page=1&perPage=24` returns cards linked to an artist and accepts the regular card
+filters. Unknown artists return `404`.
 
 ### Current price and daily history
 
