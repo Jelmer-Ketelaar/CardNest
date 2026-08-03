@@ -97,8 +97,7 @@ final class ImportTcgDexArtistsCommand extends Command
         }
 
         $startedAt = microtime(true);
-        $processedArtists = 0;
-        $lastProcessedGroup = null;
+        $progress = new ArtistImportProgress();
         try {
             $result = $this->importArtists->execute(
                 new ImportCatalogArtistsRequest(
@@ -106,13 +105,8 @@ final class ImportTcgDexArtistsCommand extends Command
                     onlyArtistNames: $artistNames,
                     batchSize: $batchSize,
                 ),
-                static function (string $language, string $artistName, int $cardCount) use (
-                    $io,
-                    &$processedArtists,
-                    &$lastProcessedGroup,
-                ): void {
-                    ++$processedArtists;
-                    $lastProcessedGroup = sprintf('%s:%s', $language, $artistName);
+                static function (string $language, string $artistName, int $cardCount) use ($io, $progress): void {
+                    $processedArtists = $progress->record($language, $artistName);
                     if ($processedArtists === 1 || $processedArtists % 25 === 0) {
                         $io->writeln(sprintf(
                             '[%s] %d artist groups processed; latest: %s (%d source cards).',
@@ -148,7 +142,7 @@ final class ImportTcgDexArtistsCommand extends Command
             $result->getProviderCardReferences(),
         ));
         $io->writeln(sprintf('Duration: %.2f seconds.', microtime(true) - $startedAt));
-        $io->writeln(sprintf('Last source group: %s.', $lastProcessedGroup ?? 'none'));
+        $io->writeln(sprintf('Last source group: %s.', $progress->getLastSourceGroup() ?? 'none'));
         $io->writeln('Provider data cutoff: unavailable; TCGdex does not expose a version or cutoff for this response.');
 
         if ($result->getMissingCards() > 0) {

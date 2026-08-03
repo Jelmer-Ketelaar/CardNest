@@ -6,6 +6,7 @@ namespace App\Catalog\Application;
 
 use App\Catalog\Application\Dto\CatalogArtistImportResult;
 use App\Catalog\Application\Dto\ImportCatalogArtistsRequest;
+use App\Catalog\Application\Import\ArtistResolutionContext;
 use App\Catalog\Application\Import\CatalogArtistImportStore;
 use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Provider\CatalogArtistProvider;
@@ -44,13 +45,10 @@ final readonly class ImportCatalogArtists
                 }
 
                 $result->recordProcessedArtist(count($group->cardExternalIds));
-                $artistCache = [];
-                $pendingSlugs = [];
                 $artist = $this->resolveArtist(
                     $group->canonicalName,
                     $result,
-                    $artistCache,
-                    $pendingSlugs,
+                    new ArtistResolutionContext(),
                 );
                 $artist->recordExternalReference(
                     $this->provider->getProviderName(),
@@ -82,15 +80,14 @@ final readonly class ImportCatalogArtists
                 return;
             }
 
-            $artistCache = [];
-            $pendingSlugs = [];
+            $resolutionContext = new ArtistResolutionContext();
             foreach ($cards as $card) {
                 $illustrator = $card->getIllustrator();
                 if ($illustrator === null || Artist::canonicalizeName($illustrator) === '') {
                     continue;
                 }
 
-                $artist = $this->resolveArtist($illustrator, $result, $artistCache, $pendingSlugs);
+                $artist = $this->resolveArtist($illustrator, $result, $resolutionContext);
                 $card->synchronizePrimaryArtist($artist);
                 $this->store->persist($card);
                 $result->recordBackfilledCard();
@@ -166,26 +163,21 @@ final readonly class ImportCatalogArtists
         $this->store->clear();
     }
 
-    /**
-     * @param array<string, Artist> $artistCache
-     * @param array<string, string> $pendingSlugs
-     */
     private function resolveArtist(
         string $canonicalName,
         CatalogArtistImportResult $result,
-        array &$artistCache,
-        array &$pendingSlugs,
+        ArtistResolutionContext $resolutionContext,
     ): Artist {
         $canonicalName = Artist::canonicalizeName($canonicalName);
         $normalizedName = Artist::normalizeName($canonicalName);
-        if (isset($artistCache[$normalizedName])) {
-            return $artistCache[$normalizedName];
+        $cachedArtist = $resolutionContext->findArtist($normalizedName);
+        if ($cachedArtist instanceof Artist) {
+            return $cachedArtist;
         }
 
         $artist = $this->store->findArtistByNormalizedName($normalizedName);
         if ($artist instanceof Artist) {
-            $artistCache[$normalizedName] = $artist;
-            $pendingSlugs[$artist->getSlug()] = $normalizedName;
+            $resolutionContext->remember($artist);
             $result->recordExistingArtist();
 
             return $artist;
@@ -193,7 +185,7 @@ final readonly class ImportCatalogArtists
 
         $artist = Artist::fromCanonicalName($canonicalName);
         $slugOwner = $this->store->findArtistBySlug($artist->getSlug());
-        $pendingSlugOwner = $pendingSlugs[$artist->getSlug()] ?? null;
+        $pendingSlugOwner = $resolutionContext->findNormalizedNameForSlug($artist->getSlug());
         if (
             ($slugOwner instanceof Artist && $slugOwner->getNormalizedName() !== $normalizedName)
             || ($pendingSlugOwner !== null && $pendingSlugOwner !== $normalizedName)
@@ -201,7 +193,7 @@ final readonly class ImportCatalogArtists
             $suffix = '-'.substr(hash('sha256', $normalizedName), 0, 8);
             $slug = mb_substr($artist->getSlug(), 0, 220 - mb_strlen($suffix)).$suffix;
             $slugOwner = $this->store->findArtistBySlug($slug);
-            $pendingSlugOwner = $pendingSlugs[$slug] ?? null;
+            $pendingSlugOwner = $resolutionContext->findNormalizedNameForSlug($slug);
             if (
                 ($slugOwner instanceof Artist && $slugOwner->getNormalizedName() !== $normalizedName)
                 || ($pendingSlugOwner !== null && $pendingSlugOwner !== $normalizedName)
@@ -213,8 +205,7 @@ final readonly class ImportCatalogArtists
         }
 
         $this->store->persist($artist);
-        $artistCache[$normalizedName] = $artist;
-        $pendingSlugs[$artist->getSlug()] = $normalizedName;
+        $resolutionContext->remember($artist);
         $result->recordCreatedArtist();
 
         return $artist;
