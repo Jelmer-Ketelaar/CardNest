@@ -48,6 +48,7 @@ jobs:
       - run: cp .env.example .env
       - run: composer install --no-interaction --prefer-dist
       - run: php bin/console doctrine:migrations:migrate --no-interaction
+      - run: php bin/console doctrine:schema:validate --no-interaction
       - run: php bin/phpunit
       - run: php bin/console cache:clear --env=dev
       - run: vendor/bin/phpstan analyse --no-progress --memory-limit=512M
