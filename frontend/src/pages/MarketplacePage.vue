@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { nextTick, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
+import BaseModal from '../components/BaseModal.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import { useAuthStore } from '../stores/auth'
 import type { PaginatedResponse } from '../types/api'
@@ -22,6 +23,7 @@ const route = useRoute()
 const router = useRouter()
 const listings = ref<Listing[]>([])
 const selectedListing = ref<Listing | null>(null)
+const listingModalTriggerId = ref<string | null>(null)
 const total = ref(0)
 const totalPages = ref(0)
 const page = ref(1)
@@ -155,6 +157,7 @@ async function loadSelectedListing(id: string): Promise<void> {
 }
 
 async function openListing(id: string): Promise<void> {
+  listingModalTriggerId.value = id
   if (route.params.id === id) {
     await loadSelectedListing(id)
 
@@ -195,6 +198,17 @@ async function addToCart(listing: Listing): Promise<void> {
   }
 }
 
+async function restoreListingTriggerFocus(): Promise<void> {
+  const listingId = listingModalTriggerId.value
+  if (listingId === null) return
+
+  await nextTick()
+  const trigger = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-listing-id]'))
+    .find((element) => element.dataset.listingId === listingId)
+  trigger?.focus()
+  listingModalTriggerId.value = null
+}
+
 async function loadFromRoute(): Promise<void> {
   applyRouteState()
   await loadListings()
@@ -202,6 +216,7 @@ async function loadFromRoute(): Promise<void> {
   if (listingId === null) {
     latestDetailRequest += 1
     selectedListing.value = null
+    await restoreListingTriggerFocus()
 
     return
   }
@@ -273,7 +288,7 @@ watch(() => route.fullPath, () => { void loadFromRoute() }, { immediate: true })
             <strong>{{ formatMoney(listing.price.amount, listing.price.currency) }}</strong>
             <span>vanaf {{ formatMoney(lowestTotal(listing), listing.price.currency) }} totaal</span>
           </div>
-          <BaseButton @click="openListing(listing.id)">Bekijk aanbieding</BaseButton>
+          <BaseButton :data-listing-id="listing.id" @click="openListing(listing.id)">Bekijk aanbieding</BaseButton>
         </div>
       </article>
     </section>
@@ -284,8 +299,12 @@ watch(() => route.fullPath, () => { void loadFromRoute() }, { immediate: true })
       <BaseButton variant="secondary" :disabled="page >= totalPages || loading" @click="goToPage(page + 1)">Volgende</BaseButton>
     </nav>
 
-    <div v-if="selectedListing" class="modal-backdrop" @click.self="closeListing">
-      <section class="panel listing-detail" role="dialog" aria-modal="true" aria-labelledby="listing-detail-heading">
+    <BaseModal
+      v-if="selectedListing"
+      heading-id="listing-detail-heading"
+      panel-class="listing-detail"
+      @close="closeListing"
+    >
         <div class="listing-detail__photos">
           <img v-for="image in selectedListing.images" :key="image.id" :src="image.url" :alt="`${selectedListing.card.name} ${image.side}`">
         </div>
@@ -317,7 +336,6 @@ watch(() => route.fullPath, () => { void loadFromRoute() }, { immediate: true })
             {{ addingListingId === selectedListing.id ? 'Toevoegen…' : (auth.isAuthenticated ? 'In winkelmand' : 'Inloggen om te kopen') }}
           </BaseButton>
         </div>
-      </section>
-    </div>
+    </BaseModal>
   </main>
 </template>

@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ApiError, apiRequest } from '../api/client'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
+import BaseModal from '../components/BaseModal.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import type { StorageLocation, StorageLocationCollectionResponse } from '../types/storage'
 
@@ -209,8 +210,7 @@ onMounted(() => { void loadLocations() })
       </section>
     </section>
 
-    <div v-if="editing" class="modal-backdrop" @click.self="closeEdit">
-      <section class="panel edit-panel" role="dialog" aria-modal="true" aria-labelledby="edit-storage-heading">
+    <BaseModal v-if="editing" heading-id="edit-storage-heading" panel-class="edit-panel" @close="closeEdit">
         <p class="eyebrow">Opslaghiërarchie</p>
         <h2 id="edit-storage-heading">{{ editing.name }} bewerken</h2>
         <form @submit.prevent="updateLocation">
@@ -235,11 +235,9 @@ onMounted(() => { void loadLocations() })
             <BaseButton type="submit" :disabled="saving">{{ saving ? 'Opslaan…' : 'Opslaan' }}</BaseButton>
           </div>
         </form>
-      </section>
-    </div>
+    </BaseModal>
 
-    <div v-if="deleting" class="modal-backdrop" @click.self="closeDelete">
-      <section class="panel edit-panel" role="dialog" aria-modal="true" aria-labelledby="delete-storage-heading">
+    <BaseModal v-if="deleting" heading-id="delete-storage-heading" panel-class="edit-panel" @close="closeDelete">
         <p class="eyebrow">Opslaghiërarchie</p>
         <h2 id="delete-storage-heading">{{ deleting.name }} verwijderen?</h2>
         <p>
@@ -252,7 +250,6 @@ onMounted(() => { void loadLocations() })
             {{ saving ? 'Verwijderen…' : 'Definitief verwijderen' }}
           </BaseButton>
         </div>
-      </section>
-    </div>
+    </BaseModal>
   </main>
 </template>

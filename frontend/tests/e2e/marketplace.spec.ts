@@ -57,11 +57,19 @@ test('a visitor can compare the complete listing price', async ({ page }) => {
   await page.goto('/marketplace')
   await expect(page.getByRole('heading', { name: 'Mudkip 19/25' })).toBeVisible()
   await expect(page.getByText(/vanaf\s+€\s*7,50 totaal/)).toBeVisible()
-  await page.getByRole('button', { name: 'Bekijk aanbieding' }).click()
+  const openListingButton = page.getByRole('button', { name: 'Bekijk aanbieding' })
+  await openListingButton.click()
   await expect(page).toHaveURL(`/marketplace/listings/${listing.id}`)
   await expect(page.getByRole('heading', { name: 'Volledige prijzen' })).toBeVisible()
   await expect(page.getByText(/€\s*9,00 totaal/)).toBeVisible()
   await expect(page.locator('.shipping-totals').getByText(/^€\s*7,50 totaal$/)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Bekijk reputatie van deze verkoper' })).toBeFocused()
+
+  await page.keyboard.press('Escape')
+
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page).toHaveURL('/marketplace')
+  await expect(openListingButton).toBeFocused()
 })
 
 test('a collector can publish a physical collection item', async ({ page }) => {
