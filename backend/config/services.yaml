@@ -151,3 +151,10 @@ when@test:
         App\Order\Application\CheckoutFaultInjector:
             alias: App\Order\Application\NullCheckoutFaultInjector
             public: true
+
+when@e2e:
+    services:
+        App\Tests\Support\:
+            resource: '../tests/Support/'
+            autowire: true
+            autoconfigure: true

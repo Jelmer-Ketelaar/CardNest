@@ -70,12 +70,15 @@ seller-profile routes show aggregate reputation and paginated review comments wi
 | `npm run lint` | Lint Vue, TypeScript and Playwright source files |
 | `npm test` | Run Vitest unit tests once |
 | `npm run test:e2e` | Run the Playwright end-to-end suite |
+| `npm run test:e2e:real` | Run the real-service suite after its isolated Compose stack is ready |
 
 ## Testing conventions
 
 - **Unit tests** (Vitest) live next to what they test — `BaseInput.vue` → `BaseInput.test.ts`, `utils/money.ts` →
   `utils/money.test.ts` — and run in `jsdom` (configured in `vite.config.ts`).
-- **End-to-end tests** (Playwright) live in `e2e/*.spec.ts` and drive a real dev server (`playwright.config.ts`
-  starts one automatically), but stub the API with `page.route(...)` rather than requiring a live backend — see
-  `e2e/registration.spec.ts`.
+- **Fast browser tests** live in `tests/e2e/*.spec.ts`. They drive a real Vite server but stub API responses with
+  `page.route(...)`, keeping focused UI behavior fast and deterministic.
+- **Real-service browser tests** live in `tests/e2e-real/*.spec.ts` and may not mock CardNest API requests. Run them
+  from the repository root with `bash scripts/run-real-e2e.sh`; the script creates isolated PostgreSQL and Redis
+  services, loads synthetic fixtures, runs one Chromium worker and always removes the E2E containers and data.
 - TypeScript runs in strict mode (`tsconfig.json`); avoid `any` without a comment explaining why it's unavoidable.
