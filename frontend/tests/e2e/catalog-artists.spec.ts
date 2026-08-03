@@ -1,3 +1,4 @@
+// Vendor
 import { expect, test } from '@playwright/test'
 
 test('a visitor filters catalog cards with the artist autocomplete', async ({ page }) => {
