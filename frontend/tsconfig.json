@@ -12,5 +12,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vitest/globals"]
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "tests/unit/App.test.ts", "tests/unit/utils/money.test.ts", "tests/setup.ts", "tests/unit/stores/auth.test.ts", "tests/unit/router/index.test.ts", "tests/unit/api/client.test.ts", "tests/unit/components/BaseInput.test.ts", "tests/unit/constants/cardLanguages.test.ts", "tests/unit/pages/AccountPage.test.ts", "tests/unit/pages/ArtistDetailPage.test.ts", "tests/unit/pages/ArtistsPage.test.ts", "tests/unit/pages/BindersPage.test.ts", "tests/unit/pages/CartPage.test.ts", "tests/unit/pages/CatalogCardsPage.test.ts", "tests/unit/pages/CatalogSetDetailPage.test.ts", "tests/unit/pages/CatalogCardDetailPage.test.ts", "tests/unit/pages/CollectionItemDetailPage.test.ts", "tests/unit/pages/CatalogSetsPage.test.ts", "tests/unit/pages/HealthPage.test.ts", "tests/unit/pages/CollectionPage.test.ts", "tests/unit/pages/LoginPage.test.ts", "tests/unit/pages/MarketplacePage.test.ts", "tests/unit/pages/MyListingsPage.test.ts", "tests/unit/pages/OrdersPage.test.ts", "tests/unit/pages/RegistrationPage.test.ts", "tests/unit/pages/StoragePage.test.ts", "tests/unit/pages/UserProfilePage.test.ts", "tests/unit/pages/WishlistsPage.test.ts", "tests/unit/**/*.ts", "tests/setup.ts"]
 }
