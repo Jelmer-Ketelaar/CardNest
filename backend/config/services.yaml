@@ -60,6 +60,9 @@ services:
     App\Catalog\Domain\Repository\ArtistRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineArtistRepository
 
+    App\Catalog\Domain\Repository\PokemonSpeciesRepository:
+        alias: App\Catalog\Infrastructure\Persistence\DoctrinePokemonSpeciesRepository
+
     App\Catalog\Domain\Repository\CatalogImportRunRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCatalogImportRunRepository
 
