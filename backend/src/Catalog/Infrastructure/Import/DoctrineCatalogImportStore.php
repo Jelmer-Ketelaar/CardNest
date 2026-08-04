@@ -10,6 +10,7 @@ use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CatalogCard;
 use Doctrine\ORM\EntityManagerInterface;
+use Throwable;
 
 final readonly class DoctrineCatalogImportStore implements CatalogImportStore
 {
@@ -78,5 +79,25 @@ final readonly class DoctrineCatalogImportStore implements CatalogImportStore
     public function clear(): void
     {
         $this->entityManager->clear();
+    }
+
+    public function runInTransaction(callable $operation): mixed
+    {
+        $connection = $this->entityManager->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            $result = $operation();
+            $connection->commit();
+
+            return $result;
+        } catch (Throwable $exception) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            $this->entityManager->clear();
+
+            throw $exception;
+        }
     }
 }

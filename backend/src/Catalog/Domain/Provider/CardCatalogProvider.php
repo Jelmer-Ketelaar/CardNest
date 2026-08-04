@@ -11,6 +11,8 @@ namespace App\Catalog\Domain\Provider;
  */
 interface CardCatalogProvider
 {
+    public function getProviderName(): string;
+
     /**
      * @param list<string> $onlySetIds
      *

@@ -48,9 +48,9 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Search normalized artist records with autocomplete and browse public artist pages
 - Look up a single set or card in full detail, including every variant it was printed in (holo, reverse holo,
   illustration rare, ...) drawn from a closed, configurable vocabulary instead of free text
-- Import official set and card data from TCGdex through a provider adapter. The import is resumable and idempotent:
-  it retains the source name, external id and raw provider payload, refreshes that raw data on a later run, and keeps
-  manual source corrections separate
+- Import official set and card data from TCGdex through a provider adapter. Every invocation has a durable audit
+  record, stages and validates the complete requested scope before publication, publishes each set transactionally,
+  and keeps refreshed raw provider payloads separate from manual source corrections
 - Catalog data is intentionally public and read-only. It describes what a card officially *is* — never who owns one
 - Seed data ships two real-shaped sets and twenty cards for local exploration, including the "Mudkip 19/25" example
   used throughout the product specification
@@ -368,12 +368,19 @@ docker compose exec backend php bin/console --no-debug catalog:import:tcgdex
 TCGdex image bases are resolved to external `high.webp` detail images and `low.webp` thumbnails as documented by
 the provider; CardNest does not download or store those protected card images locally.
 
-This is intentionally a long-running, resumable operation. For a small validation run, target a language and set;
-running the same command again does not create duplicates:
+This is intentionally a long-running, safely repeatable operation. For a small validation run, target a language
+and set; running the same command again synchronizes the same natural records rather than creating duplicates:
 
 ```bash
 docker compose exec backend php bin/console catalog:import:tcgdex --language=en --set=base1
 ```
+
+Imports persist normalized staging data and validate the entire requested scope before changing live catalog rows.
+Every run records provider, scope, checksums, counts, timestamps, and its terminal status. Publication is
+transactional per set; a later set failure is explicit in the run's published counts and can be retried safely. An
+approved immutable snapshot may pass `--source-version` and `--data-cutoff`; an exact replay is then skipped, while
+changed content under the same version is rejected before publication. See
+[docs/catalog-import.md](docs/catalog-import.md) for the lifecycle and operational query.
 
 The standard run imports the complete set/card index needed for browsing and wishlists with one source request per
 set. To enrich those same records with the full per-card source payload (rarity, card type, detailed variants,
@@ -422,6 +429,7 @@ docker compose exec frontend npm run test:e2e
 
 - [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes
 - [docs/catalog.md](docs/catalog.md) — catalog entities, artist reconciliation, source scope, and data limitations
+- [docs/catalog-import.md](docs/catalog-import.md) — staged imports, run audits, idempotency, and failure semantics
 - [docs/architecture.md](docs/architecture.md) — system diagram, module layering, and an end-to-end request walkthrough
 - [docs/security-review.md](docs/security-review.md) — repeatable MVP security release gate and evidence template
 - [docs/release-checklist.md](docs/release-checklist.md) — MVP quality, security, accessibility and deployment release gate

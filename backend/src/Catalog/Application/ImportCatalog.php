@@ -6,32 +6,44 @@ namespace App\Catalog\Application;
 
 use App\Catalog\Application\Dto\CatalogImportResult;
 use App\Catalog\Application\Dto\ImportCatalogRequest;
+use App\Catalog\Application\Exception\CatalogImportAlreadyRunning;
+use App\Catalog\Application\Exception\CatalogImportValidationFailed;
+use App\Catalog\Application\Import\CatalogImportStagingStore;
 use App\Catalog\Application\Import\CatalogImportStore;
+use App\Catalog\Application\Import\CatalogImportValidator;
 use App\Catalog\Domain\Entity\Artist;
 use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CatalogCard;
+use App\Catalog\Domain\Entity\CatalogImportRun;
+use App\Catalog\Domain\Entity\CatalogImportStatus;
 use App\Catalog\Domain\Provider\CardCatalogProvider;
 use App\Catalog\Domain\Provider\ImportedCardSet;
 use App\Catalog\Domain\Provider\ImportedCatalogCard;
+use App\Catalog\Domain\Repository\CatalogImportRunRepository;
 use DateTimeImmutable;
 use DateTimeZone;
-use InvalidArgumentException;
 use RuntimeException;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Throwable;
 
 /**
- * Imports catalog source data in bounded Doctrine batches. Existing catalog
- * cards are identified by their provider reference, so changes in a source's
- * display number cannot create duplicate CardNest records.
+ * Stages and validates a complete requested provider scope before publishing
+ * live catalog records in bounded, per-set transactions.
  */
 final readonly class ImportCatalog
 {
-    private const string SOURCE_NAME = 'tcgdex';
+    private const float LOCK_TTL_SECONDS = 3_600.0;
 
     public function __construct(
         private CardCatalogProvider $provider,
         private CatalogImportStore $store,
+        private CatalogImportStagingStore $staging,
+        private CatalogImportRunRepository $runs,
+        private CatalogImportValidator $validator,
+        private LockFactory $lockFactory,
     ) {
     }
 
@@ -40,47 +52,264 @@ final readonly class ImportCatalog
      */
     public function execute(ImportCatalogRequest $request, ?callable $reportSet = null): CatalogImportResult
     {
-        $result = new CatalogImportResult();
+        $provider = $this->provider->getProviderName();
+        $run = new CatalogImportRun(
+            provider: $provider,
+            scopeKey: $request->scopeKey($provider),
+            dataScope: $request->dataScope(),
+            sourceVersion: $request->sourceVersion,
+            dataCutoff: $request->dataCutoff,
+        );
+        $this->runs->save($run);
+        $lock = $this->lockFactory->createLock($request->lockName($provider), self::LOCK_TTL_SECONDS);
+        if (!$lock->acquire()) {
+            $run->fail('Another catalog import is already running for the same provider scope.');
+            $this->runs->save($run);
+
+            throw new CatalogImportAlreadyRunning($run->getFailureReason() ?? 'Catalog import scope is locked.');
+        }
+
+        try {
+            [$setCount, $cardCount] = $this->stage($request, $run, $lock);
+            $run->markValidating($this->staging->checksum($run->getId()->toRfc4122()), $setCount, $cardCount);
+            $this->runs->save($run);
+
+            $duplicate = $this->completedDuplicate($run);
+            if ($duplicate instanceof CatalogImportRun) {
+                $run->skipAsDuplicate($duplicate);
+                $this->runs->save($run);
+                $result = new CatalogImportResult();
+                $result->attachRun($run);
+
+                return $result;
+            }
+
+            $run->markPublishing();
+            $this->runs->save($run);
+            $this->store->clear();
+            $result = $this->publish($request, $run, $lock, $reportSet);
+
+            $this->store->clear();
+            $completedRun = $this->runs->get($run->getId()->toRfc4122())
+                ?? throw new RuntimeException('The catalog import run could not be reloaded.');
+            $completedRun->complete(
+                $result->getCreatedSets() + $result->getExistingSets(),
+                $result->getCreatedCards() + $result->getSyncedCards(),
+            );
+            $this->runs->save($completedRun);
+            $result->attachRun($completedRun);
+
+            return $result;
+        } catch (Throwable $exception) {
+            $this->recordFailure($run->getId()->toRfc4122(), $exception);
+
+            throw $exception;
+        } finally {
+            $this->staging->clear($run->getId()->toRfc4122());
+            $lock->release();
+        }
+    }
+
+    /** @return array{int, int} */
+    private function stage(ImportCatalogRequest $request, CatalogImportRun $run, LockInterface $lock): array
+    {
+        $provider = $run->getProvider();
+        $runId = $run->getId()->toRfc4122();
+        $setPosition = 0;
+        $cardCount = 0;
+        $seenSets = [];
+        $seenCards = [];
 
         foreach ($request->languages as $language) {
-            foreach ($this->provider->importSets($language, $request->onlySetIds) as $importedSet) {
-                $set = $this->importSet($importedSet, $result);
-                $this->store->flush();
-                $pendingCards = 0;
-
-                foreach ($this->provider->importCards($importedSet, $request->includeCardDetails) as $importedCard) {
-                    if ($importedCard->setExternalId !== $importedSet->externalId) {
-                        throw new RuntimeException('The catalog provider returned a card for a different set.');
-                    }
-
-                    $this->importCard($set, $importedCard, $result);
-                    ++$pendingCards;
-
-                    if ($pendingCards < $request->batchSize) {
-                        continue;
-                    }
-
-                    $this->store->flush();
-                    $this->store->clear();
-                    $set = $this->store->findSetByCode($this->setCode($importedSet))
-                        ?? throw new RuntimeException('The imported card set could not be reloaded.');
-                    $pendingCards = 0;
+            $returnedSetIds = [];
+            foreach ($this->provider->importSets($language, $request->onlySetIds) as $set) {
+                if ($set->language !== $language) {
+                    $message = sprintf(
+                        'The provider returned language "%s" while staging "%s".',
+                        $set->language,
+                        $language,
+                    );
+                    throw new CatalogImportValidationFailed($message);
                 }
 
-                $this->store->flush();
-                $this->store->clear();
-                if ($reportSet !== null) {
-                    $reportSet($language, $importedSet->externalId, count($importedSet->cardExternalIds));
+                $setKey = sprintf('%s:%s', $set->language, $set->externalId);
+                if (isset($seenSets[$setKey])) {
+                    throw new CatalogImportValidationFailed(sprintf('Duplicate staged set "%s".', $setKey));
                 }
+                $this->validator->validateSet($provider, $set);
+                $seenSets[$setKey] = true;
+                $returnedSetIds[$set->externalId] = true;
+                $this->staging->stageSet($runId, $set, $setPosition);
+
+                $expectedCardIds = array_fill_keys($set->cardExternalIds, true);
+                $stagedSetCardIds = [];
+                $cardPosition = 0;
+                foreach ($this->provider->importCards($set, $request->includeCardDetails) as $card) {
+                    $this->validator->validateCard($provider, $set, $card, $expectedCardIds);
+                    $cardKey = sprintf('%s:%s', $card->language, $card->externalId);
+                    if (isset($seenCards[$cardKey])) {
+                        throw new CatalogImportValidationFailed(sprintf('Duplicate staged card "%s".', $cardKey));
+                    }
+
+                    $seenCards[$cardKey] = true;
+                    $stagedSetCardIds[$card->externalId] = true;
+                    $this->staging->stageCard($runId, $card, $cardPosition);
+                    ++$cardPosition;
+                    ++$cardCount;
+                    if ($cardCount % 50 === 0) {
+                        $lock->refresh(self::LOCK_TTL_SECONDS);
+                    }
+                }
+
+                if (count($stagedSetCardIds) !== count($expectedCardIds)) {
+                    $missingCardIds = array_keys(array_diff_key($expectedCardIds, $stagedSetCardIds));
+                    $message = sprintf(
+                        'Set "%s" is missing %d staged cards; first missing reference: "%s".',
+                        $setKey,
+                        count($missingCardIds),
+                        $missingCardIds[0] ?? 'unknown',
+                    );
+                    throw new CatalogImportValidationFailed($message);
+                }
+
+                ++$setPosition;
+                $lock->refresh(self::LOCK_TTL_SECONDS);
+            }
+
+            $missingSetIds = array_values(array_diff($request->onlySetIds, array_keys($returnedSetIds)));
+            if ($missingSetIds !== []) {
+                $message = sprintf(
+                    'Language "%s" is missing requested set "%s".',
+                    $language,
+                    $missingSetIds[0],
+                );
+                throw new CatalogImportValidationFailed($message);
+            }
+        }
+
+        if ($setPosition === 0) {
+            throw new CatalogImportValidationFailed('The provider returned no sets for the requested catalog scope.');
+        }
+
+        return [$setPosition, $cardCount];
+    }
+
+    private function completedDuplicate(CatalogImportRun $run): ?CatalogImportRun
+    {
+        $checksum = $run->getContentChecksum()
+            ?? throw new RuntimeException('A validating catalog import requires a content checksum.');
+        $sourceVersion = $run->getSourceVersion();
+        if ($sourceVersion === null) {
+            return null;
+        }
+
+        $versionMatch = $this->runs->findCompletedBySourceVersion(
+            $run->getProvider(),
+            $run->getScopeKey(),
+            $sourceVersion,
+        );
+        if (!$versionMatch instanceof CatalogImportRun) {
+            return null;
+        }
+        if ($versionMatch->getContentChecksum() !== $checksum) {
+            $message = sprintf(
+                'Source version "%s" produced a different catalog checksum.',
+                $sourceVersion,
+            );
+            throw new CatalogImportValidationFailed($message);
+        }
+
+        return $versionMatch;
+    }
+
+    /**
+     * @param callable(string, string, int): void|null $reportSet
+     */
+    private function publish(
+        ImportCatalogRequest $request,
+        CatalogImportRun $run,
+        LockInterface $lock,
+        ?callable $reportSet,
+    ): CatalogImportResult {
+        $result = new CatalogImportResult();
+        $publishedSets = 0;
+        $publishedCards = 0;
+        $runId = $run->getId()->toRfc4122();
+
+        foreach ($this->staging->sets($runId) as $stagedSet) {
+            $setResult = $this->store->runInTransaction(
+                function () use (
+                    $request,
+                    $run,
+                    $stagedSet,
+                    $runId,
+                    $publishedSets,
+                    $publishedCards,
+                ): CatalogImportResult {
+                    $setResult = $this->publishSet($request, $run, $stagedSet);
+                    $setCardCount = $setResult->getCreatedCards() + $setResult->getSyncedCards();
+                    $this->runs->updatePublicationProgress(
+                        $runId,
+                        $publishedSets + 1,
+                        $publishedCards + $setCardCount,
+                    );
+
+                    return $setResult;
+                },
+            );
+            $result->merge($setResult);
+            ++$publishedSets;
+            $publishedCards += $setResult->getCreatedCards() + $setResult->getSyncedCards();
+            $lock->refresh(self::LOCK_TTL_SECONDS);
+
+            if ($reportSet !== null) {
+                $reportSet($stagedSet->language, $stagedSet->externalId, count($stagedSet->cardExternalIds));
             }
         }
 
         return $result;
     }
 
-    private function importSet(ImportedCardSet $importedSet, CatalogImportResult $result): CardSet
-    {
-        $setCode = $this->setCode($importedSet);
+    private function publishSet(
+        ImportCatalogRequest $request,
+        CatalogImportRun $run,
+        ImportedCardSet $importedSet,
+    ): CatalogImportResult {
+        $result = new CatalogImportResult();
+        $set = $this->importSet($run->getProvider(), $importedSet, $result);
+        $this->store->flush();
+        $pendingCards = 0;
+
+        foreach ($this->staging->cards(
+            $run->getId()->toRfc4122(),
+            $importedSet->language,
+            $importedSet->externalId,
+        ) as $importedCard) {
+            $this->importCard($run->getProvider(), $set, $importedCard, $result);
+            ++$pendingCards;
+            if ($pendingCards < $request->batchSize) {
+                continue;
+            }
+
+            $this->store->flush();
+            $this->store->clear();
+            $set = $this->store->findSetByCode($this->validator->setCode($run->getProvider(), $importedSet))
+                ?? throw new RuntimeException('The imported card set could not be reloaded.');
+            $pendingCards = 0;
+        }
+
+        $this->store->flush();
+        $this->store->clear();
+
+        return $result;
+    }
+
+    private function importSet(
+        string $provider,
+        ImportedCardSet $importedSet,
+        CatalogImportResult $result,
+    ): CardSet {
+        $setCode = $this->validator->setCode($provider, $importedSet);
         $existingSet = $this->store->findSetByCode($setCode);
         if ($existingSet instanceof CardSet) {
             $status = $existingSet->getStatus() === CardSetStatus::OutOfPrint
@@ -101,7 +330,7 @@ final readonly class ImportCatalog
             return $existingSet;
         }
 
-        $seriesSourceKey = sprintf('%s:series:%s', self::SOURCE_NAME, mb_strtolower($importedSet->seriesExternalId));
+        $seriesSourceKey = sprintf('%s:series:%s', $provider, mb_strtolower($importedSet->seriesExternalId));
         $series = $this->store->findSeriesBySourceKey($seriesSourceKey);
         if (!$series instanceof CardSeries) {
             $existingSeriesWithName = $this->store->findSeriesByName($importedSet->seriesName);
@@ -135,12 +364,13 @@ final readonly class ImportCatalog
     }
 
     private function importCard(
+        string $provider,
         CardSet $set,
         ImportedCatalogCard $importedCard,
         CatalogImportResult $result,
     ): void {
         $externalId = $this->cardExternalId($importedCard);
-        $card = $this->store->findCardByExternalReference(self::SOURCE_NAME, $externalId);
+        $card = $this->store->findCardByExternalReference($provider, $externalId);
         if (!$card instanceof CatalogCard) {
             $card = new CatalogCard(
                 set: $set,
@@ -162,8 +392,7 @@ final readonly class ImportCatalog
             }
 
             $this->attachImportedArtist($card, $importedCard->illustrator);
-
-            $card->addExternalReference(self::SOURCE_NAME, $externalId, $importedCard->rawData);
+            $card->addExternalReference($provider, $externalId, $importedCard->rawData);
             $this->store->persist($card);
             $result->recordCreatedCard();
 
@@ -171,65 +400,52 @@ final readonly class ImportCatalog
         }
 
         foreach ($card->getExternalReferences() as $reference) {
-            if ($reference->getSourceName() === self::SOURCE_NAME && $reference->getExternalId() === $externalId) {
-                if ($importedCard->isDetailed) {
-                    if ($reference->getCorrectedData() === null) {
-                        $card->synchronizeFromProvider(
-                            name: $importedCard->name,
-                            rarity: $importedCard->rarity,
-                            cardType: $importedCard->cardType,
-                            primaryCollectible: $importedCard->primaryCollectible,
-                            illustrator: $importedCard->illustrator,
-                            imageUrl: $importedCard->imageUrl,
-                            thumbnailUrl: $importedCard->thumbnailUrl,
-                            variants: $importedCard->variants,
-                            metadata: $importedCard->metadata,
-                        );
-                        $this->attachImportedArtist($card, $importedCard->illustrator);
-                    }
-                    $reference->markSynced($importedCard->rawData);
-                } else {
-                    if ($reference->getCorrectedData() === null) {
-                        $card->synchronizeSummaryFromProvider(
-                            name: $importedCard->name,
-                            imageUrl: $importedCard->imageUrl,
-                            thumbnailUrl: $importedCard->thumbnailUrl,
-                        );
-                    }
-                    if (!$this->containsDetailedSourceData($reference->getRawData())) {
-                        $reference->markSynced($importedCard->rawData);
-                    }
-                }
-                $this->store->persist($card);
-                $result->recordSyncedCard();
-
-                return;
+            if ($reference->getSourceName() !== $provider || $reference->getExternalId() !== $externalId) {
+                continue;
             }
+
+            if ($importedCard->isDetailed) {
+                if ($reference->getCorrectedData() === null) {
+                    $card->synchronizeFromProvider(
+                        name: $importedCard->name,
+                        rarity: $importedCard->rarity,
+                        cardType: $importedCard->cardType,
+                        primaryCollectible: $importedCard->primaryCollectible,
+                        illustrator: $importedCard->illustrator,
+                        imageUrl: $importedCard->imageUrl,
+                        thumbnailUrl: $importedCard->thumbnailUrl,
+                        variants: $importedCard->variants,
+                        metadata: $importedCard->metadata,
+                    );
+                    $this->attachImportedArtist($card, $importedCard->illustrator);
+                }
+                $reference->markSynced($importedCard->rawData);
+            } else {
+                if ($reference->getCorrectedData() === null) {
+                    $card->synchronizeSummaryFromProvider(
+                        name: $importedCard->name,
+                        imageUrl: $importedCard->imageUrl,
+                        thumbnailUrl: $importedCard->thumbnailUrl,
+                    );
+                }
+                if (!$this->containsDetailedSourceData($reference->getRawData())) {
+                    $reference->markSynced($importedCard->rawData);
+                }
+            }
+            $this->store->persist($card);
+            $result->recordSyncedCard();
+
+            return;
         }
 
-        $card->addExternalReference(self::SOURCE_NAME, $externalId, $importedCard->rawData);
+        $card->addExternalReference($provider, $externalId, $importedCard->rawData);
         $this->store->persist($card);
         $result->recordSyncedCard();
     }
 
-    private function setCode(ImportedCardSet $set): string
-    {
-        $code = sprintf('%s:%s:%s', self::SOURCE_NAME, $set->language, $set->externalId);
-        if (mb_strlen($code) > 50) {
-            throw new InvalidArgumentException('The external set identifier exceeds the CardSet code limit.');
-        }
-
-        return $code;
-    }
-
     private function cardExternalId(ImportedCatalogCard $card): string
     {
-        $externalId = sprintf('%s:%s', $card->language, $card->externalId);
-        if (mb_strlen($externalId) > 180) {
-            throw new InvalidArgumentException('The external card identifier exceeds the catalog reference limit.');
-        }
-
-        return $externalId;
+        return sprintf('%s:%s', $card->language, $card->externalId);
     }
 
     /** @param array<string, mixed> $rawData */
@@ -261,5 +477,22 @@ final readonly class ImportCatalog
         return $releaseDate instanceof DateTimeImmutable && $releaseDate > $today
             ? CardSetStatus::Announced
             : CardSetStatus::Active;
+    }
+
+    private function recordFailure(string $runId, Throwable $exception): void
+    {
+        $this->store->clear();
+        $failedRun = $this->runs->get($runId);
+        if (!$failedRun instanceof CatalogImportRun || $failedRun->getStatus()->isTerminal()) {
+            return;
+        }
+        if ($failedRun->getStatus() === CatalogImportStatus::Running) {
+            $stagedCounts = $this->staging->counts($runId);
+            $failedRun->recordStagedCounts($stagedCounts['sets'], $stagedCounts['cards']);
+        }
+
+        $safeReason = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $exception->getMessage());
+        $failedRun->fail(is_string($safeReason) ? $safeReason : 'Catalog import failed.');
+        $this->runs->save($failedRun);
     }
 }

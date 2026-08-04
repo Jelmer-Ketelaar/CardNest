@@ -30,4 +30,13 @@ interface CatalogImportStore
     public function flush(): void;
 
     public function clear(): void;
+
+    /**
+     * @template T
+     *
+     * @param callable(): T $operation
+     *
+     * @return T
+     */
+    public function runInTransaction(callable $operation): mixed;
 }
