@@ -46,8 +46,8 @@ CardNest is implemented incrementally, one module at a time. This is the current
 - Search the catalog (`GET /api/v1/cards`) filtered by set, series, name, card number, rarity, variant, or artist,
   with pagination
 - Search normalized artist records with autocomplete and browse public artist pages
-- Persist canonical Pokémon species identities, searchable aliases, and bounded source references; the registry is
-  not imported or presented as complete until a later approved coverage run verifies it
+- Persist canonical Pokémon species identities, searchable aliases, official forms, and bounded source references;
+  neither registry is imported or presented as complete until a later approved coverage run verifies it
 - Look up a single set or card in full detail, including every variant it was printed in (holo, reverse holo,
   illustration rare, ...) drawn from a closed, configurable vocabulary instead of free text
 - Import official set and card data from TCGdex through a provider adapter. Every invocation has a durable audit
