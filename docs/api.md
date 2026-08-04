@@ -115,6 +115,47 @@ and profile-image fields remain `null` unless a trustworthy source and usage rig
 `GET /api/v1/artists/{id}/cards?page=1&perPage=24` returns cards linked to an artist and accepts the regular card
 filters. Unknown artists return `404`.
 
+### Catalog coverage and discrepancies
+
+`GET /api/v1/catalog/coverage?provider=tcgdex&region=international&language=en` is public and returns the latest
+evidence-backed coverage snapshot for that exact scope. Without a snapshot it returns a successful response with
+`releaseGate.status: "not_verified"` and `blockingReasons: ["no_verified_snapshot"]`; it never estimates
+completeness from the current row count.
+
+Coverage administration requires `ROLE_ADMIN`:
+
+- `GET /api/v1/admin/catalog/discrepancies` accepts `status`, `severity`, `type`, `provider`, `language`, `region`,
+  `page`, and `perPage`;
+- `PATCH /api/v1/admin/catalog/discrepancies/{id}` accepts a non-open `status` plus a 10–1000 character `reason`;
+- `POST /api/v1/admin/catalog/coverage-snapshots` measures and stores an approved manifest.
+
+Example snapshot request:
+
+```json
+{
+  "importRunId": "0198d5ea-37c8-7dd4-a993-48ea916b7e19",
+  "provider": "tcgdex",
+  "region": "international",
+  "language": "en",
+  "evidenceSource": "approved-catalog-manifest",
+  "evidenceVersion": "2026-08-04",
+  "evidenceReference": "catalog-evidence://international/en/2026-08-04",
+  "dataCutoff": "2026-08-04T00:00:00+00:00",
+  "sets": [
+    { "externalId": "base1", "expectedCardCount": 102 }
+  ],
+  "expectedImageCardCount": 102,
+  "blockedDimensions": ["images"]
+}
+```
+
+The referenced run must be successful, versioned, use the same cutoff, include the requested language, and—when
+bounded—contain exactly the submitted set IDs. Repeating a run and identical manifest is idempotent. Responses
+separate every coverage dimension, expose integer basis points, include source version/cutoff and manifest checksum,
+and never contain provider payloads or user identities beyond admin audit UUIDs. Images and prices do not silently
+substitute for incomplete core catalog records. See [catalog-coverage.md](catalog-coverage.md) for gate semantics and
+the current `not_verified` Pokémon-model limitation.
+
 ### Current price and daily history
 
 `GET /api/v1/cards/{id}/prices?days=30` is public and returns Cardmarket EUR indications plus CardNest's own daily
@@ -900,6 +941,8 @@ Every error response follows the same shape:
 | `collection_item_not_found` | 404 | Item doesn't exist, or isn't owned by the caller |
 | `catalog_card_unavailable` | 422 | Referenced `catalogCardId` doesn't exist |
 | `card_variant_unavailable` | 422 | Referenced `variantId` doesn't exist or doesn't belong to the card |
+| `catalog_discrepancy_not_found` | 404 | Administrative discrepancy ID does not exist |
+| `invalid_catalog_coverage_evidence` | 422 | Import run and approved manifest provenance do not match |
 | `collection_item_archived` | 409 | Attempted to change an archived collection item |
 | `collection_item_listed` | 409 | Attempted to change or archive a physical item currently for sale |
 | `storage_location_not_found` | 404 | Location doesn't exist, or isn't owned by the caller |

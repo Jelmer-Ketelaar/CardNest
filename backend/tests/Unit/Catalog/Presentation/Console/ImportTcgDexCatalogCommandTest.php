@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Catalog\Presentation\Console;
 
+use App\Catalog\Application\CatalogDiscrepancyRecorder;
 use App\Catalog\Application\Import\CatalogImportStagingStore;
 use App\Catalog\Application\Import\CatalogImportStore;
 use App\Catalog\Application\Import\CatalogImportValidator;
 use App\Catalog\Application\ImportCatalog;
 use App\Catalog\Domain\Provider\CardCatalogProvider;
+use App\Catalog\Domain\Repository\CatalogDiscrepancyRepository;
 use App\Catalog\Domain\Repository\CatalogImportRunRepository;
 use App\Catalog\Presentation\Console\ImportTcgDexCatalogCommand;
 use PHPUnit\Framework\TestCase;
@@ -61,6 +63,7 @@ final class ImportTcgDexCatalogCommandTest extends TestCase
             $this->createStub(CatalogImportStagingStore::class),
             $this->createStub(CatalogImportRunRepository::class),
             new CatalogImportValidator(),
+            new CatalogDiscrepancyRecorder($this->createStub(CatalogDiscrepancyRepository::class)),
             new LockFactory(new InMemoryStore()),
         ), $kernel);
     }

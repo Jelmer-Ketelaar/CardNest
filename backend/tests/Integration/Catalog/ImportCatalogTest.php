@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Catalog;
 
+use App\Catalog\Application\CatalogDiscrepancyRecorder;
 use App\Catalog\Application\Dto\ImportCatalogRequest;
 use App\Catalog\Application\Exception\CatalogImportAlreadyRunning;
 use App\Catalog\Application\Exception\CatalogImportValidationFailed;
@@ -23,6 +24,7 @@ use App\Catalog\Domain\Provider\ImportedCatalogCard;
 use App\Catalog\Domain\Repository\CatalogImportRunRepository;
 use App\Catalog\Infrastructure\Import\DoctrineCatalogImportStagingStore;
 use App\Catalog\Infrastructure\Import\DoctrineCatalogImportStore;
+use App\Catalog\Infrastructure\Persistence\DoctrineCatalogDiscrepancyRepository;
 use App\Catalog\Infrastructure\Persistence\DoctrineCatalogImportRunRepository;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
@@ -478,23 +480,58 @@ final class ImportCatalogTest extends KernelTestCase
         $this->assertStagingIsEmpty();
     }
 
+    public function testGenericProviderFailuresAreIdempotentWithoutCollapsingDistinctErrors(): void
+    {
+        // Arrange
+        $provider = new ConfigurableCatalogProvider();
+        $provider->failAfterFirstCard = true;
+        $importer = $this->importer($provider);
+
+        // Act
+        foreach (['Repeated provider failure.', 'Repeated provider failure.', 'Different provider failure.'] as $message) {
+            $provider->failureMessage = $message;
+            try {
+                $importer->execute(new ImportCatalogRequest(['en']));
+                $this->fail('The configured provider failure must abort the import.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame($message, $exception->getMessage());
+            }
+        }
+
+        // Assert
+        $occurrenceCounts = $this->entityManager->getConnection()->fetchFirstColumn(
+            "SELECT occurrence_count FROM catalog_discrepancies WHERE discrepancy_type = 'provider_error' ORDER BY occurrence_count",
+        );
+        $this->assertSame([1, 2], array_map('intval', $occurrenceCounts));
+        $this->assertStagingIsEmpty();
+    }
+
     public function testInvalidSourceReferencesAreRejectedBeforePublishing(): void
     {
         // Arrange
         $provider = new ConfigurableCatalogProvider();
         $provider->cardExternalIds = ['duplicate-card', 'duplicate-card'];
+        $importer = $this->importer($provider);
 
         // Act
-        try {
-            $this->importer($provider)->execute(new ImportCatalogRequest(['en']));
-            self::fail('Duplicate source card references must fail validation.');
-        } catch (CatalogImportValidationFailed $exception) {
-            self::assertStringContainsString('duplicate card references', $exception->getMessage());
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            try {
+                $importer->execute(new ImportCatalogRequest(['en']));
+                $this->fail('Duplicate source card references must fail validation.');
+            } catch (CatalogImportValidationFailed $exception) {
+                $this->assertStringContainsString('duplicate card references', $exception->getMessage());
+            }
         }
 
         // Assert
-        self::assertSame(0, (int) $this->entityManager->getConnection()->fetchOne('SELECT COUNT(*) FROM card_sets'));
-        self::assertSame(CatalogImportStatus::Failed->value, $this->lastRunCounts()['status']);
+        $this->assertSame(0, (int) $this->entityManager->getConnection()->fetchOne('SELECT COUNT(*) FROM card_sets'));
+        $this->assertSame(CatalogImportStatus::Failed->value, $this->lastRunCounts()['status']);
+        $this->assertSame(1, (int) $this->entityManager->getConnection()->fetchOne(
+            "SELECT COUNT(*) FROM catalog_discrepancies WHERE discrepancy_type = 'duplicate_card'",
+        ));
+        $this->assertSame(2, (int) $this->entityManager->getConnection()->fetchOne(
+            'SELECT occurrence_count FROM catalog_discrepancies LIMIT 1',
+        ));
         $this->assertStagingIsEmpty();
     }
 
@@ -652,6 +689,7 @@ final class ImportCatalogTest extends KernelTestCase
             new DoctrineCatalogImportStagingStore($this->entityManager->getConnection()),
             $runs ?? new DoctrineCatalogImportRunRepository($this->entityManager),
             new CatalogImportValidator(),
+            new CatalogDiscrepancyRecorder(new DoctrineCatalogDiscrepancyRepository($this->entityManager)),
             $lockFactory ?? new LockFactory(new InMemoryStore()),
         );
     }

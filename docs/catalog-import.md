@@ -67,8 +67,9 @@ scopes.
 ## Manual corrections and source data
 
 Provider raw data can be refreshed, but `CardExternalReference.correctedData` remains separate and is never erased
-by synchronization. Detailed card imports do not overwrite an explicit correction. This increment does not yet add
-the discrepancy and manual-override administration model; that remains part of catalog reconciliation.
+by synchronization. Detailed card imports do not overwrite an explicit correction. Typed validation failures are
+persisted as catalog discrepancies. Coverage gaps and operator resolution semantics are described in
+[catalog-coverage.md](catalog-coverage.md); arbitrary provider payloads remain outside API responses.
 
 ## Operations
 

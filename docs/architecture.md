@@ -124,7 +124,7 @@ flowchart TD
 | Module | Owns | Depends on |
 | --- | --- | --- |
 | `Identity` | `users`, `auth_tokens` | `Shared` |
-| `Catalog` | catalog records, artists, provider references, import audits and staging | `Shared` |
+| `Catalog` | catalog records, artists, provider references, import audits/staging, discrepancies and coverage snapshots | `Identity` (admin audit actor), `Shared` |
 | `Collection` | `collection_items` | `Catalog` (which card/variant), `Identity` (owner), `Shared` (`Money`) |
 | `Storage` | `storage_locations`, `collection_item_location_history` | `Collection` (physical item), `Identity` (owner) |
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
@@ -144,6 +144,24 @@ will slot in the same way, each adding one more layer of dependency on
 `App\Shared\Infrastructure\Http\JsonExceptionSubscriber` is the one place that turns a thrown domain/application
 exception into a structured HTTP error response (status code + machine-readable `code` + message). Every module adds
 its own `match` arms there instead of formatting errors itself.
+
+## Catalog reconciliation boundary
+
+Catalog import and completeness use two separate evidence layers. `CatalogImportRun` plus durable staging proves
+what a provider returned and what CardNest published atomically. `CatalogDiscrepancy` records typed, repeatable
+problems in one import scope. `CatalogCoverageSnapshot` then measures a successful versioned run against a separate,
+administrator-approved manifest and stores the immutable per-dimension release decision.
+
+The provider adapter does not decide that its own dataset is globally complete. Expected set/card totals enter only
+through the approved manifest. PostgreSQL measurement remains behind `CatalogCoverageDataSource`, while gate policy
+remains a deterministic application service. The public API can therefore expose the latest gate without exposing
+provider payloads or granting write access. Administrator resolution keeps both the user relation and an immutable
+actor UUID so account deletion does not erase the audit trail.
+
+Coverage intentionally reports Pokémon species, forms, and card mappings as `not_verified` until those relational
+models exist. Images and prices are independent dimensions because an external licensing or availability gap must
+not be confused with a missing catalog record. Full semantics and the operator flow are in
+[catalog-coverage.md](catalog-coverage.md).
 
 ## Example flow: registering a physical card
 

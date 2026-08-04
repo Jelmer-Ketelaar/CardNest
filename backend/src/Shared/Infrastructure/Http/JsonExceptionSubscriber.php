@@ -9,6 +9,8 @@ use App\Binder\Application\Exception\BinderSlotNotFound;
 use App\Binder\Domain\Exception\BinderSlotOccupied;
 use App\Binder\Domain\Exception\BinderSlotReservationMismatch;
 use App\Binder\Domain\Exception\InvalidBinderConfiguration;
+use App\Catalog\Application\Exception\CatalogDiscrepancyNotFound;
+use App\Catalog\Application\Exception\InvalidCatalogCoverageEvidence;
 use App\Collection\Application\Exception\CardVariantUnavailable;
 use App\Collection\Application\Exception\CatalogCardUnavailable;
 use App\Collection\Application\Exception\CollectionItemNotFound;
@@ -89,6 +91,8 @@ final readonly class JsonExceptionSubscriber
             $exception instanceof CardVariantDoesNotBelongToCard => [422, 'card_variant_unavailable', $exception->getMessage()],
             $exception instanceof ArchivedCollectionItemCannotBeChanged => [409, 'collection_item_archived', $exception->getMessage()],
             $exception instanceof ListedCollectionItemCannotBeChanged => [409, 'collection_item_listed', $exception->getMessage()],
+            $exception instanceof CatalogDiscrepancyNotFound => [404, 'catalog_discrepancy_not_found', $exception->getMessage()],
+            $exception instanceof InvalidCatalogCoverageEvidence => [422, 'invalid_catalog_coverage_evidence', $exception->getMessage()],
             $exception instanceof StorageLocationNotFound => [404, 'storage_location_not_found', $exception->getMessage()],
             $exception instanceof StorageLocationInUse => [409, 'storage_location_in_use', $exception->getMessage()],
             $exception instanceof InvalidStorageHierarchy,

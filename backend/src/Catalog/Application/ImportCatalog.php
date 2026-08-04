@@ -16,12 +16,16 @@ use App\Catalog\Domain\Entity\CardSeries;
 use App\Catalog\Domain\Entity\CardSet;
 use App\Catalog\Domain\Entity\CardSetStatus;
 use App\Catalog\Domain\Entity\CatalogCard;
+use App\Catalog\Domain\Entity\CatalogDiscrepancyEntityType;
+use App\Catalog\Domain\Entity\CatalogDiscrepancySeverity;
+use App\Catalog\Domain\Entity\CatalogDiscrepancyType;
 use App\Catalog\Domain\Entity\CatalogImportRun;
 use App\Catalog\Domain\Entity\CatalogImportStatus;
 use App\Catalog\Domain\Provider\CardCatalogProvider;
 use App\Catalog\Domain\Provider\ImportedCardSet;
 use App\Catalog\Domain\Provider\ImportedCatalogCard;
 use App\Catalog\Domain\Repository\CatalogImportRunRepository;
+use App\Catalog\Domain\ValueObject\CatalogDiscrepancyObservation;
 use DateTimeImmutable;
 use DateTimeZone;
 use RuntimeException;
@@ -43,6 +47,7 @@ final readonly class ImportCatalog
         private CatalogImportStagingStore $staging,
         private CatalogImportRunRepository $runs,
         private CatalogImportValidator $validator,
+        private CatalogDiscrepancyRecorder $discrepancyRecorder,
         private LockFactory $lockFactory,
     ) {
     }
@@ -129,12 +134,12 @@ final readonly class ImportCatalog
                         $set->language,
                         $language,
                     );
-                    throw new CatalogImportValidationFailed($message);
+                    throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: sprintf('language-mismatch:%s:%s', $language, $set->language), entityType: CatalogDiscrepancyEntityType::Set, type: CatalogDiscrepancyType::ProviderError, severity: CatalogDiscrepancySeverity::High, message: $message, externalReference: $set->externalId, language: $language));
                 }
 
                 $setKey = sprintf('%s:%s', $set->language, $set->externalId);
                 if (isset($seenSets[$setKey])) {
-                    throw new CatalogImportValidationFailed(sprintf('Duplicate staged set "%s".', $setKey));
+                    throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'duplicate-set:'.$setKey, entityType: CatalogDiscrepancyEntityType::Set, type: CatalogDiscrepancyType::DuplicateSet, severity: CatalogDiscrepancySeverity::Critical, message: sprintf('Duplicate staged set "%s".', $setKey), externalReference: $set->externalId, language: $set->language));
                 }
                 $this->validator->validateSet($provider, $set);
                 $seenSets[$setKey] = true;
@@ -148,7 +153,7 @@ final readonly class ImportCatalog
                     $this->validator->validateCard($provider, $set, $card, $expectedCardIds);
                     $cardKey = sprintf('%s:%s', $card->language, $card->externalId);
                     if (isset($seenCards[$cardKey])) {
-                        throw new CatalogImportValidationFailed(sprintf('Duplicate staged card "%s".', $cardKey));
+                        throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'duplicate-card:'.$cardKey, entityType: CatalogDiscrepancyEntityType::Card, type: CatalogDiscrepancyType::DuplicateCard, severity: CatalogDiscrepancySeverity::Critical, message: sprintf('Duplicate staged card "%s".', $cardKey), externalReference: $card->externalId, language: $card->language));
                     }
 
                     $seenCards[$cardKey] = true;
@@ -169,7 +174,7 @@ final readonly class ImportCatalog
                         count($missingCardIds),
                         $missingCardIds[0] ?? 'unknown',
                     );
-                    throw new CatalogImportValidationFailed($message);
+                    throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'missing-cards:'.$setKey, entityType: CatalogDiscrepancyEntityType::Set, type: CatalogDiscrepancyType::MissingCard, severity: CatalogDiscrepancySeverity::Critical, message: $message, externalReference: $set->externalId, language: $set->language));
                 }
 
                 ++$setPosition;
@@ -183,12 +188,13 @@ final readonly class ImportCatalog
                     $language,
                     $missingSetIds[0],
                 );
-                throw new CatalogImportValidationFailed($message);
+                throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: sprintf('missing-set:%s:%s', $language, $missingSetIds[0]), entityType: CatalogDiscrepancyEntityType::Set, type: CatalogDiscrepancyType::MissingSet, severity: CatalogDiscrepancySeverity::Critical, message: $message, externalReference: $missingSetIds[0], language: $language));
             }
         }
 
         if ($setPosition === 0) {
-            throw new CatalogImportValidationFailed('The provider returned no sets for the requested catalog scope.');
+            $language = count($request->languages) === 1 ? $request->languages[0] : null;
+            throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'empty-provider-scope', entityType: CatalogDiscrepancyEntityType::Scope, type: CatalogDiscrepancyType::MissingSet, severity: CatalogDiscrepancySeverity::Critical, message: 'The provider returned no sets for the requested catalog scope.', language: $language));
         }
 
         return [$setPosition, $cardCount];
@@ -216,7 +222,7 @@ final readonly class ImportCatalog
                 'Source version "%s" produced a different catalog checksum.',
                 $sourceVersion,
             );
-            throw new CatalogImportValidationFailed($message);
+            throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'conflicting-source-version:'.$sourceVersion, entityType: CatalogDiscrepancyEntityType::Scope, type: CatalogDiscrepancyType::ConflictingSourceVersion, severity: CatalogDiscrepancySeverity::Critical, message: $message, language: $this->singleRunLanguage($run)));
         }
 
         return $versionMatch;
@@ -492,7 +498,38 @@ final readonly class ImportCatalog
         }
 
         $safeReason = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $exception->getMessage());
-        $failedRun->fail(is_string($safeReason) ? $safeReason : 'Catalog import failed.');
+        $failureSummary = is_string($safeReason) && trim($safeReason) !== ''
+            ? mb_substr(trim($safeReason), 0, 2_000)
+            : 'The catalog provider failed without a safe error summary.';
+        $failedRun->fail($failureSummary);
         $this->runs->save($failedRun);
+
+        $observation = $exception instanceof CatalogImportValidationFailed
+            ? $exception->observation
+            : null;
+        $this->discrepancyRecorder->record(
+            $failedRun,
+            $observation ?? new CatalogDiscrepancyObservation(
+                identity: sprintf(
+                    'provider-error:%s:%s',
+                    $exception::class,
+                    hash('sha256', $failureSummary),
+                ),
+                entityType: CatalogDiscrepancyEntityType::Import,
+                type: CatalogDiscrepancyType::ProviderError,
+                severity: CatalogDiscrepancySeverity::High,
+                message: $failureSummary,
+                language: $this->singleRunLanguage($failedRun),
+            ),
+        );
+    }
+
+    private function singleRunLanguage(CatalogImportRun $run): ?string
+    {
+        $languages = $run->getDataScope()['languages'] ?? null;
+
+        return is_array($languages) && count($languages) === 1 && is_string($languages[0])
+            ? $languages[0]
+            : null;
     }
 }

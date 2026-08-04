@@ -21,4 +21,12 @@ enum CatalogImportStatus: string
             self::Running, self::Validating, self::Publishing => false,
         };
     }
+
+    public function isSuccessful(): bool
+    {
+        return match ($this) {
+            self::Completed, self::CompletedWithWarnings, self::Skipped => true,
+            self::Running, self::Validating, self::Publishing, self::Failed => false,
+        };
+    }
 }

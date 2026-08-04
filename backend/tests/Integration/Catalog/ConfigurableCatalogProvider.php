@@ -23,6 +23,8 @@ final class ConfigurableCatalogProvider implements CardCatalogProvider
 
     public bool $failAfterFirstCard = false;
 
+    public string $failureMessage = 'Provider failed after returning a partial set.';
+
     public function getProviderName(): string
     {
         return 'test-provider';
@@ -56,7 +58,7 @@ final class ConfigurableCatalogProvider implements CardCatalogProvider
             yield $this->card($set, $set->cardExternalIds[0]);
         }
         if ($this->failAfterFirstCard) {
-            throw new RuntimeException('Provider failed after returning a partial set.');
+            throw new RuntimeException($this->failureMessage);
         }
 
         foreach (array_slice($set->cardExternalIds, 1) as $externalId) {
