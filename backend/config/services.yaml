@@ -60,6 +60,9 @@ services:
     App\Catalog\Domain\Repository\ArtistRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineArtistRepository
 
+    App\Catalog\Domain\Repository\CatalogImportRunRepository:
+        alias: App\Catalog\Infrastructure\Persistence\DoctrineCatalogImportRunRepository
+
     App\Catalog\Domain\Provider\CardCatalogProvider:
         alias: App\Catalog\Infrastructure\Provider\TcgDexCardCatalogProvider
 
@@ -72,6 +75,9 @@ services:
 
     App\Catalog\Application\Import\CatalogImportStore:
         alias: App\Catalog\Infrastructure\Import\DoctrineCatalogImportStore
+
+    App\Catalog\Application\Import\CatalogImportStagingStore:
+        alias: App\Catalog\Infrastructure\Import\DoctrineCatalogImportStagingStore
 
     App\Catalog\Application\Import\CatalogArtistImportStore:
         alias: App\Catalog\Infrastructure\Import\DoctrineCatalogArtistImportStore

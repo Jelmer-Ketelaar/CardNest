@@ -4,6 +4,9 @@ The Catalog module is the public, read-only source of truth for card series, lan
 variants, artists, and provider references. A `CatalogCard` describes an official catalog entry; it never represents
 a physical card owned by a user.
 
+Set and card ingestion is staged, validated, audited, and published per set. The complete lifecycle, idempotency
+rules, failure semantics, and operator query are documented in [catalog-import.md](catalog-import.md).
+
 ## Artist model
 
 `Artist` is the canonical technical term. Each artist has a canonical display name, normalized name, stable slug,

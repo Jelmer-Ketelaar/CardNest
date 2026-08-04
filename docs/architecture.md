@@ -124,7 +124,7 @@ flowchart TD
 | Module | Owns | Depends on |
 | --- | --- | --- |
 | `Identity` | `users`, `auth_tokens` | `Shared` |
-| `Catalog` | `card_series`, `card_sets`, `catalog_cards`, `card_variants`, `card_external_references` | `Shared` |
+| `Catalog` | catalog records, artists, provider references, import audits and staging | `Shared` |
 | `Collection` | `collection_items` | `Catalog` (which card/variant), `Identity` (owner), `Shared` (`Money`) |
 | `Storage` | `storage_locations`, `collection_item_location_history` | `Collection` (physical item), `Identity` (owner) |
 | `Binder` | `binders`, `binder_pages`, `binder_slots` | `Collection` (placement), `Storage` (history/parent), `Catalog` (reserved card), `Identity` (owner) |
