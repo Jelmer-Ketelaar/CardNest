@@ -8,6 +8,8 @@ Set and card ingestion is staged, validated, audited, and published per set. The
 rules, failure semantics, and operator query are documented in [catalog-import.md](catalog-import.md).
 Typed source discrepancies, evidence manifests, per-dimension measurements, and release-gate semantics are
 documented in [catalog-coverage.md](catalog-coverage.md).
+The relational Pokémon species identity foundation, its provenance rules, and its deliberately unverified status are
+documented in [pokemon-model.md](pokemon-model.md).
 
 ## Artist model
 
@@ -72,10 +74,11 @@ languages at the time of the run. It does not establish global artist, set, card
 TCGdex language coverage differs, upstream records can change, and CardNest must continue to report coverage per
 source and language.
 
-The current schema still lacks Pokémon species, forms, card-to-Pokémon mappings, and source-backed official set
-positions. Coverage reports those dimensions as `not_verified`; CardNest cannot currently pass a global Pokémon
-catalog release gate. Natural card-number ordering remains available for stable UI pagination, but is not mislabeled
-as official provider order.
+The schema now has a relational Pokémon species identity foundation, aliases, and bounded source references, but no
+approved registry import has populated or reconciled it. Forms, card-to-Pokémon mappings, and source-backed official
+set positions still do not exist. Coverage therefore keeps those dimensions as `not_verified`; CardNest cannot
+currently pass a global Pokémon catalog release gate. Natural card-number ordering remains available for stable UI
+pagination, but is not mislabeled as official provider order.
 
 The current relational coverage can be reproduced without relying on documentation counters:
 
