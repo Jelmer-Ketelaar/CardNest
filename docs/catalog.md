@@ -6,6 +6,8 @@ a physical card owned by a user.
 
 Set and card ingestion is staged, validated, audited, and published per set. The complete lifecycle, idempotency
 rules, failure semantics, and operator query are documented in [catalog-import.md](catalog-import.md).
+Typed source discrepancies, evidence manifests, per-dimension measurements, and release-gate semantics are
+documented in [catalog-coverage.md](catalog-coverage.md).
 
 ## Artist model
 
@@ -57,8 +59,9 @@ operation.
 CardNest does not infer an attribution from card names, artwork, search results, or unrelated marketplace data. A
 provider card that is absent from the local catalog is reported as missing. A source attribution that conflicts with
 a non-empty legacy attribution is retained as an explicit conflict and does not silently overwrite the stored value.
-Persistent discrepancy records and coverage release gates belong to the catalog reconciliation increment; the
-current command provides machine-countable totals and bounded diagnostic samples.
+Persistent discrepancy records now retain typed import and coverage failures with an auditable resolution history.
+An immutable coverage snapshot can only be created from a successful versioned import and an approved manifest;
+current command totals remain diagnostics and are not themselves a completeness claim.
 
 The command reports duration and the last processed source group. TCGdex does not currently expose a dataset
 version or cutoff in these responses, so CardNest reports that cutoff as unavailable rather than substituting the
@@ -68,6 +71,11 @@ local execution time.
 languages at the time of the run. It does not establish global artist, set, card, image, or language completeness.
 TCGdex language coverage differs, upstream records can change, and CardNest must continue to report coverage per
 source and language.
+
+The current schema still lacks Pokémon species, forms, card-to-Pokémon mappings, and source-backed official set
+positions. Coverage reports those dimensions as `not_verified`; CardNest cannot currently pass a global Pokémon
+catalog release gate. Natural card-number ordering remains available for stable UI pagination, but is not mislabeled
+as official provider order.
 
 The current relational coverage can be reproduced without relying on documentation counters:
 

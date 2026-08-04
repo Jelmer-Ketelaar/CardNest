@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Catalog\Application\Import;
 
 use App\Catalog\Application\Exception\CatalogImportValidationFailed;
+use App\Catalog\Domain\Entity\CatalogDiscrepancyEntityType;
+use App\Catalog\Domain\Entity\CatalogDiscrepancySeverity;
+use App\Catalog\Domain\Entity\CatalogDiscrepancyType;
 use App\Catalog\Domain\Entity\VariantCode;
 use App\Catalog\Domain\Provider\ImportedCardSet;
 use App\Catalog\Domain\Provider\ImportedCatalogCard;
+use App\Catalog\Domain\ValueObject\CatalogDiscrepancyObservation;
 
 final readonly class CatalogImportValidator
 {
@@ -27,7 +31,7 @@ final readonly class CatalogImportValidator
                 $set->language,
                 $set->externalId,
             );
-            throw new CatalogImportValidationFailed($message);
+            throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'conflicting-total:'.$set->language.':'.$set->externalId, entityType: CatalogDiscrepancyEntityType::Set, type: CatalogDiscrepancyType::ConflictingTotal, severity: CatalogDiscrepancySeverity::Critical, message: $message, externalReference: $set->externalId, language: $set->language));
         }
         if (count($set->cardExternalIds) !== $set->total) {
             $message = sprintf(
@@ -37,7 +41,7 @@ final readonly class CatalogImportValidator
                 $set->total,
                 count($set->cardExternalIds),
             );
-            throw new CatalogImportValidationFailed($message);
+            throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'declared-total:'.$set->language.':'.$set->externalId, entityType: CatalogDiscrepancyEntityType::Set, type: CatalogDiscrepancyType::ConflictingTotal, severity: CatalogDiscrepancySeverity::Critical, message: $message, externalReference: $set->externalId, language: $set->language));
         }
         if (count(array_unique($set->cardExternalIds)) !== count($set->cardExternalIds)) {
             $message = sprintf(
@@ -45,7 +49,7 @@ final readonly class CatalogImportValidator
                 $set->language,
                 $set->externalId,
             );
-            throw new CatalogImportValidationFailed($message);
+            throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'duplicate-card-reference:'.$set->language.':'.$set->externalId, entityType: CatalogDiscrepancyEntityType::Set, type: CatalogDiscrepancyType::DuplicateCard, severity: CatalogDiscrepancySeverity::Critical, message: $message, externalReference: $set->externalId, language: $set->language));
         }
         foreach ($set->cardExternalIds as $cardExternalId) {
             $this->required($cardExternalId, 170, 'card external ID');
@@ -96,7 +100,8 @@ final readonly class CatalogImportValidator
         $this->nullableLength($card->thumbnailUrl, 1_024, 'card thumbnail URL');
 
         if ($card->variants === []) {
-            throw new CatalogImportValidationFailed(sprintf('Card "%s" has no variants.', $card->externalId));
+            $message = sprintf('Card "%s" has no variants.', $card->externalId);
+            throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'unknown-variant:'.$card->language.':'.$card->externalId, entityType: CatalogDiscrepancyEntityType::Card, type: CatalogDiscrepancyType::UnknownVariant, severity: CatalogDiscrepancySeverity::High, message: $message, externalReference: $card->externalId, language: $card->language));
         }
         $variantCodes = array_map(static fn (VariantCode $variant): string => $variant->value, $card->variants);
         if (count(array_unique($variantCodes)) !== count($variantCodes)) {
@@ -104,7 +109,7 @@ final readonly class CatalogImportValidator
                 'Card "%s" contains duplicate variants.',
                 $card->externalId,
             );
-            throw new CatalogImportValidationFailed($message);
+            throw CatalogImportValidationFailed::observed(new CatalogDiscrepancyObservation(identity: 'duplicate-variant:'.$card->language.':'.$card->externalId, entityType: CatalogDiscrepancyEntityType::Card, type: CatalogDiscrepancyType::UnknownVariant, severity: CatalogDiscrepancySeverity::High, message: $message, externalReference: $card->externalId, language: $card->language));
         }
         if (mb_strlen(sprintf('%s:%s', $card->language, $card->externalId)) > 180) {
             throw new CatalogImportValidationFailed('The normalized card external reference exceeds 180 characters.');

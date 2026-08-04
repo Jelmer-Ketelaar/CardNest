@@ -430,6 +430,7 @@ docker compose exec frontend npm run test:e2e
 - [docs/api.md](docs/api.md) — the full HTTP contract, request/response shapes, and error codes
 - [docs/catalog.md](docs/catalog.md) — catalog entities, artist reconciliation, source scope, and data limitations
 - [docs/catalog-import.md](docs/catalog-import.md) — staged imports, run audits, idempotency, and failure semantics
+- [docs/catalog-coverage.md](docs/catalog-coverage.md) — discrepancy audit, evidence manifests, and release gates
 - [docs/architecture.md](docs/architecture.md) — system diagram, module layering, and an end-to-end request walkthrough
 - [docs/security-review.md](docs/security-review.md) — repeatable MVP security release gate and evidence template
 - [docs/release-checklist.md](docs/release-checklist.md) — MVP quality, security, accessibility and deployment release gate
