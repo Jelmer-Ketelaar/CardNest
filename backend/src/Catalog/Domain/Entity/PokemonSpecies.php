@@ -11,6 +11,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use InvalidArgumentException;
+use LogicException;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Uid\Uuid;
 
@@ -61,6 +62,15 @@ final class PokemonSpecies
     )]
     private Collection $externalReferences;
 
+    /** @var Collection<int, PokemonForm> */
+    #[ORM\OneToMany(
+        mappedBy: 'species',
+        targetEntity: PokemonForm::class,
+        cascade: ['persist'],
+        orphanRemoval: true,
+    )]
+    private Collection $forms;
+
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private readonly DateTimeImmutable $createdAt;
 
@@ -91,6 +101,7 @@ final class PokemonSpecies
         $this->introducedAt = $introducedAt;
         $this->aliases = new ArrayCollection();
         $this->externalReferences = new ArrayCollection();
+        $this->forms = new ArrayCollection();
         $this->createdAt = $createdAt;
         $this->updatedAt = $createdAt;
     }
@@ -173,6 +184,48 @@ final class PokemonSpecies
     public function getExternalReferences(): Collection
     {
         return $this->externalReferences;
+    }
+
+    /** @return Collection<int, PokemonForm> */
+    public function getForms(): Collection
+    {
+        return $this->forms;
+    }
+
+    public function addForm(
+        string $canonicalName,
+        PokemonFormType $type,
+        bool $isDefault,
+        DateTimeImmutable $recordedAt = new DateTimeImmutable(),
+    ): PokemonForm {
+        $form = new PokemonForm(
+            species: $this,
+            canonicalName: $canonicalName,
+            type: $type,
+            isDefault: $isDefault,
+            createdAt: $recordedAt,
+        );
+
+        foreach ($this->forms as $existingForm) {
+            if ($existingForm->getNormalizedName() === $form->getNormalizedName()) {
+                if ($existingForm->getType() === $type && $existingForm->isDefault() === $isDefault) {
+                    return $existingForm;
+                }
+
+                throw new LogicException('A Pokémon form name cannot be registered with conflicting identity data.');
+            }
+            if ($existingForm->getSlug() === $form->getSlug()) {
+                throw new LogicException('A Pokémon form slug must be unique within its species.');
+            }
+            if ($isDefault && $existingForm->isDefault()) {
+                throw new LogicException('A Pokémon species can have only one default form.');
+            }
+        }
+
+        $this->forms->add($form);
+        $this->touch($recordedAt);
+
+        return $form;
     }
 
     public function recordExternalReference(

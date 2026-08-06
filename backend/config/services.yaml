@@ -63,6 +63,9 @@ services:
     App\Catalog\Domain\Repository\PokemonSpeciesRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrinePokemonSpeciesRepository
 
+    App\Catalog\Domain\Repository\PokemonFormRepository:
+        alias: App\Catalog\Infrastructure\Persistence\DoctrinePokemonFormRepository
+
     App\Catalog\Domain\Repository\CatalogImportRunRepository:
         alias: App\Catalog\Infrastructure\Persistence\DoctrineCatalogImportRunRepository
 

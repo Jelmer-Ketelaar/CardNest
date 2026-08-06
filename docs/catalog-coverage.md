@@ -57,11 +57,12 @@ The possible gate results are:
 
 ### Current limitation
 
-The current CardNest schema has no `PokemonSpecies`, `PokemonForm`, or card-to-Pokémon mapping tables. It also has a
-stable natural `number_sort_key`, but no source-backed official set-position field. Pokémon and official-ordering
-dimensions are therefore deliberately returned as `not_verified`; they are never inferred from card names,
-`primaryCollectible`, or natural number sorting. Consequently, the current implementation cannot produce a
-`passed` global Pokémon catalog gate. A successful set/card import is not proof of global completeness.
+The current CardNest schema has relational `PokemonSpecies` and `PokemonForm` identity tables, but no approved
+registry import, verified cutoff, or card-to-Pokémon mapping table. It also has a stable natural `number_sort_key`,
+but no source-backed official set-position field. Pokémon and official-ordering dimensions are therefore deliberately
+returned as `not_verified`; they are never inferred from stored row counts, card names, `primaryCollectible`, or
+natural number sorting. Consequently, the current implementation cannot produce a `passed` global Pokémon catalog
+gate. A successful set/card import is not proof of global completeness.
 
 ## Discrepancies
 

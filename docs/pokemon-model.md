@@ -1,4 +1,4 @@
-# Pokémon species identity model
+# Pokémon species and form identity model
 
 CardNest models a Pokémon species as a catalog identity, independent from a card name, card mechanic, physical
 collection item, or marketplace listing. The technical names remain `PokemonSpecies` and related English domain
@@ -36,11 +36,28 @@ One species cannot contain the same normalized alias twice. An alias equal to th
 as redundant. The current issue adds exact identity lookup only; prefix, partial, Pokédex, and accent-insensitive
 public search belong to the later Pokémon API issue.
 
+## Official forms
+
+`PokemonForm` belongs to exactly one species and stores a canonical and normalized form name, a species-scoped slug,
+a closed form type, a default flag, and timestamps. Supported classifications are default, regional, Mega Evolution,
+Primal Reversion, Gigantamax, and other official alternate forms. The generic alternate classification accommodates
+official identities such as Origin Forme without inventing a new type for every franchise-specific label.
+
+One species can have at most one default form. Both the aggregate and a PostgreSQL partial unique index enforce this;
+the database index also protects concurrent imports. The `default` type and `isDefault` flag must agree. Normalized
+names and slugs are unique within a species, while the same generic form label may legitimately occur for different
+species.
+
+Known card mechanics (`ex`, `EX`, `GX`, `V`, `VMAX`, `VSTAR`, `BREAK`, `Radiant`, and `Shining`) are rejected when
+they appear as standalone form-name tokens. These concepts describe a card printing or mechanic, not a biological
+Pokémon identity. CardNest does not infer forms from current card names or `primaryCollectible` text.
+
 ## External references
 
-`PokemonSpeciesExternalReference` maps one bounded `provider + external ID` pair to at most one species. It stores a
-nullable source version and explicit import/synchronization timestamps. Re-recording the same reference updates its
-sync information instead of creating a duplicate. Raw provider payloads are deliberately not stored in this table.
+`PokemonSpeciesExternalReference` and `PokemonFormExternalReference` each map one bounded
+`provider + external ID` pair to at most one identity of their respective type. They store a nullable source version
+and explicit import/synchronization timestamps. Re-recording the same reference updates its sync information instead
+of creating a duplicate. Raw provider payloads are deliberately not stored in these tables.
 
 The model is ready for a later approved registry provider, but this change performs no network import and designates
 no provider as globally authoritative.
@@ -49,24 +66,25 @@ no provider as globally authoritative.
 
 The following remain separate follow-up work:
 
-- `PokemonForm` and its source references;
 - importing a source-backed species/forms registry at an explicit data cutoff;
 - linking catalog cards to species/forms with role, confidence, source, and display order;
 - public Pokémon list, search, and detail APIs;
 - Pokémon frontend pages;
 - reconciling coverage and discrepancies against an approved manifest.
 
-Card mechanics such as `ex`, `EX`, `GX`, `V`, `VMAX`, `VSTAR`, `BREAK`, `Radiant`, and `Shining` are not biological
-species and are not aliases or forms. They remain card-domain concepts.
-
-Until an approved import and reconciliation run exists, species coverage stays `not_verified`. Database row counts
-show stored records, not expected global coverage:
+Until an approved import and reconciliation run exists, species and form coverage stay `not_verified`. Database row
+counts show stored records, not expected global coverage:
 
 ```sql
 SELECT COUNT(*) AS stored_species FROM pokemon_species;
 SELECT COUNT(*) AS stored_aliases FROM pokemon_species_aliases;
+SELECT COUNT(*) AS stored_forms FROM pokemon_forms;
 SELECT provider, COUNT(*)
 FROM pokemon_species_external_references
+GROUP BY provider
+ORDER BY provider;
+SELECT provider, COUNT(*)
+FROM pokemon_form_external_references
 GROUP BY provider
 ORDER BY provider;
 ```

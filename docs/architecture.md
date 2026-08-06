@@ -158,11 +158,11 @@ remains a deterministic application service. The public API can therefore expose
 provider payloads or granting write access. Administrator resolution keeps both the user relation and an immutable
 actor UUID so account deletion does not erase the audit trail.
 
-The Catalog module now contains the relational Pokémon species identity foundation, aliases, and bounded external
-references. Coverage intentionally keeps Pokémon species as `not_verified` until an approved registry import proves
-the expected cutoff; forms and card mappings remain unmodeled. Images and prices are independent dimensions because
-an external licensing or availability gap must not be confused with a missing catalog record. Full semantics and
-the operator flow are in [catalog-coverage.md](catalog-coverage.md), while identity boundaries are in
+The Catalog module now contains relational Pokémon species identities, aliases, official forms, and bounded external
+references. Coverage intentionally keeps both registries as `not_verified` until an approved import proves the
+expected cutoff; card mappings remain unmodeled. Images and prices are independent dimensions because an external
+licensing or availability gap must not be confused with a missing catalog record. Full semantics and the operator
+flow are in [catalog-coverage.md](catalog-coverage.md), while identity boundaries are in
 [pokemon-model.md](pokemon-model.md).
 
 ## Example flow: registering a physical card
